@@ -1,0 +1,3 @@
+# -*- mode: meson -*-
+option('version', type: 'string', description: '''override the version of the build''')
+option('rootprefix', type: 'string', description: '''override the root prefix''')
