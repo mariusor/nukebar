@@ -19,10 +19,15 @@ endif
 wayland_client = dependency('wayland-client', required: true)
 wayland_protos = dependency('wayland-protocols', version: '>=1.14', required: true)
 
+cc = meson.get_compiler('c')
+realtime = cc.find_library('rt', required: true)
+#nuklear = c.find_library('nuklear')
+
 subdir('protocol')
 
 deps = [
-#    dependency('nuklear', required: true),
+    realtime,
+#    nuklear,
     wayland_client,
     wayland_protos,
     client_protos
@@ -73,7 +78,6 @@ if scdoc.found()
     mandir = get_option('mandir')
     man_files = [
         'doc/nukebar.1.scd',
-        'doc/nukebar.5.scd',
     ]
     foreach filename : man_files
         topic = filename.split('.')[-3].split('/')[-1]

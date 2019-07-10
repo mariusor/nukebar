@@ -4,6 +4,7 @@
 
 #include "structs.h"
 #include "utils.h"
+#include "hello.h"
 #include "version.h"
 
 #define ARG_HELP        "help"
@@ -58,8 +59,9 @@ int main(int argc, char** argv)
     struct nukebar bar = {0};
     _trace2("Started bar %p:%u", bar, sizeof(&bar));
 
+    int status = hello();
 _success:
-    return EXIT_SUCCESS;
+    return status;
 _failure:
     return EXIT_FAILURE;
 _help:
