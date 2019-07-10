@@ -10,17 +10,22 @@ c_args = ['-Wall', '-Wextra', '-fno-omit-frame-pointer']
 
 bin_name = meson.project_name()
 
-add_project_arguments('-DAPPLICATION_NAME="' + bin_name + '"', language : 'c')
 if get_option('buildtype') == 'debug'
     add_project_arguments('-Wpedantic', language : 'c')
     add_project_arguments('-Werror', language : 'c')
     add_project_arguments('-DDEBUG', language : 'c')
 endif
 
+wayland_client = dependency('wayland-client', required: true)
+wayland_protos = dependency('wayland-protocols', version: '>=1.14', required: true)
+
+subdir('protocol')
+
 deps = [
 #    dependency('nuklear', required: true),
-    dependency('wayland-client', required: true),
-    dependency('wayland-protocols', version: '>=1.14', required: true),
+    wayland_client,
+    wayland_protos,
+    client_protos
 ]
 
 version_hash = get_option('version')
@@ -31,7 +36,9 @@ if not prefixdir.startswith('/')
 endif
 bindir = join_paths(prefixdir, get_option('bindir'))
 
-srcdir = include_directories('src')
+srcdir = [
+  include_directories('src'),
+]
 
 sources = ['src/bar.c']
 
@@ -50,6 +57,7 @@ else
     endif
 endif
 
+
 executable('nukebar',
             sources,
             c_args: c_args,
@@ -60,7 +68,6 @@ executable('nukebar',
 )
 
 scdoc = find_program('scdoc', required: false)
-
 if scdoc.found()
     sh = find_program('sh')
     mandir = get_option('mandir')
