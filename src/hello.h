@@ -72,7 +72,7 @@ static void xdg_toplevel_handle_close(void *data, struct xdg_toplevel *xdg_tople
 	}
     _trace("data[%p] top_level[%[]", data, xdg_toplevel);
     struct nukebar *bar = (struct nukebar*)data;
-    bar->running = false;
+    bar->stop = true;
 }
 
 static const struct xdg_toplevel_listener xdg_toplevel_listener = {
@@ -215,7 +215,7 @@ int hello(struct nukebar *bar)
     wl_surface_attach(bar->surface, buffer, 0, 0);
     wl_surface_commit(bar->surface);
 
-    while (wl_display_dispatch(bar->display) != -1 && bar->running) {
+    while (wl_display_dispatch(bar->display) != -1 && !bar->stop) {
         // This space intentionally left blank
     }
 

@@ -18,6 +18,6 @@ struct nukebar {
     struct zwlr_layer_surface_v1 *layer_surface;
     struct zwlr_layer_shell_v1 *layer_shell;
 
-    bool running;
+    bool stop;
 };
 #endif // NUKEBAR_STRUCTS_H
