@@ -57,9 +57,9 @@ int main(int argc, char** argv)
     }
 
     struct nukebar bar = {0};
-    _trace2("Started bar %p:%u", bar, sizeof(&bar));
+    _trace2("Started bar %p:%u", &bar, sizeof(bar));
 
-    int status = hello();
+    int status = hello(&bar);
 _success:
     return status;
 _failure:
