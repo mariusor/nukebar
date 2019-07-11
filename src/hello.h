@@ -24,39 +24,35 @@ static struct xdg_toplevel *xdg_toplevel = NULL;
 
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer, uint32_t serial,  wl_fixed_t x,  wl_fixed_t y)
 {
-    _info("pointer_motion[%p], pointer[%p] serial=%d [%d,%d]", data, pointer, serial, x, y);
+    _trace("pointer_motion[%p], pointer[%p] serial=%d [%d,%d]", data, pointer, serial, x, y);
 }
 
 static void pointer_handle_enter(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t x,  wl_fixed_t y)
 {
-    _info("pointer_enter[%p], pointer[%p] serial=%d [%d,%d] surface[%p]", data, pointer, serial, x, y, surface);
+    _trace("pointer_enter[%p], pointer[%p] serial=%d [%d,%d] surface[%p]", data, pointer, serial, x, y, surface);
 }
 
 static void pointer_handle_leave(void *data, struct wl_pointer *pointer, uint32_t serial,  struct wl_surface *surface)
 {
-    _info("pointer_leave[%p], pointer[%p] serial=%d surface[%p]", data, pointer, serial, surface);
+    _trace("pointer_leave[%p], pointer[%p] serial=%d surface[%p]", data, pointer, serial, surface);
 }
 
 static void pointer_handle_axis(void *data, struct wl_pointer *pointer, uint32_t x,  uint32_t y,  wl_fixed_t pos)
 {
-    _info("pointer_axis[%p], pointer[%p] pos=%d [%d,%d]", data, pointer, pos, x, y);
+    _trace("pointer_axis[%p], pointer[%p] pos=%d [%d,%d]", data, pointer, pos, x, y);
 }
 
 static void xdg_toplevel_handle_configure(void *data, struct xdg_toplevel *top, int32_t x, int32_t y, struct wl_array *list)
 {
-	if (data == NULL) {
-		return;
-	}
-    _info("xdg_toplevel_configure[%p], xdg_toplevel[%p] [%d,%d] arr[%p]", data, top, x, y, list);
+    _trace("xdg_toplevel_configure[%p], xdg_toplevel[%p] [%d,%d] arr[%p]", data, top, x, y, list);
 }
 
 static void xdg_surface_handle_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial)
 {
-	if (data == NULL) {
-		return;
-	}
+    _trace("xdg_surface[%p], serial=%d data[%p]", xdg_surface, serial, data);
+
+    if (data == NULL) { return; }
     struct nukebar* bar = (struct nukebar*)data;
-    _trace("xdg_surface[%p], surface[%p], serial=%d data[%p]", xdg_surface, bar->surface, serial, data);
     xdg_surface_ack_configure(xdg_surface, serial);
     wl_surface_commit(bar->surface);
 }
@@ -67,10 +63,9 @@ static const struct xdg_surface_listener xdg_surface_listener = {
 
 static void xdg_toplevel_handle_close(void *data, struct xdg_toplevel *xdg_toplevel)
 {
-	if (data == NULL) {
-		return;
-	}
-    _trace("data[%p] top_level[%[]", data, xdg_toplevel);
+    _trace("xdg_toplevel_close[%p] top_level[%p]", data, xdg_toplevel);
+
+    if (data == NULL) { return; }
     struct nukebar *bar = (struct nukebar*)data;
     bar->stop = true;
 }
@@ -82,7 +77,7 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener = {
 
 static void pointer_handle_button(void *data, struct wl_pointer *pointer, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
 {
-    _trace("data[%p]", data);
+    _trace("pointer_button[%p], pointer[%p] serial=%d, time=%d, but=%d, state=%d", data, pointer, serial, time, button, state);
     pointer = (void*)pointer;
     time = (uint32_t)time;
     struct wl_seat *seat = data;
@@ -101,11 +96,7 @@ static const struct wl_pointer_listener pointer_listener = {
 };
 
 static void seat_handle_capabilities(void *data, struct wl_seat *seat, uint32_t capabilities) {
-	if (data == NULL) {
-		return;
-	}
-    _trace("data[%p]", data);
-    data  = (void*)data;
+    _trace("seat_capabilities[%p], seat[%p], cap=%d", data, seat, capabilities);
     if (capabilities & WL_SEAT_CAPABILITY_POINTER) {
         struct wl_pointer *pointer = wl_seat_get_pointer(seat);
         wl_pointer_add_listener(pointer, &pointer_listener, seat);
@@ -207,7 +198,7 @@ int hello(struct nukebar *bar)
     xdg_toplevel = xdg_surface_get_toplevel(xdg_surface);
 
     xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, bar);
-    xdg_toplevel_add_listener(xdg_toplevel, &xdg_toplevel_listener, NULL);
+    xdg_toplevel_add_listener(xdg_toplevel, &xdg_toplevel_listener, bar);
 
     wl_surface_commit(bar->surface);
     wl_display_roundtrip(bar->display);
