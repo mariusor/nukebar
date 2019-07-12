@@ -11,12 +11,16 @@ struct nukebar {
     struct wl_registry *registry;
     struct wl_compositor *compositor;
     struct wl_shm *shm;
-    struct wl_list outputs;
-    struct wl_list seats;
+    //struct wl_list outputs;
+    //struct wl_list seats;
 
     struct wl_surface *surface;
-    struct zwlr_layer_surface_v1 *layer_surface;
-    struct zwlr_layer_shell_v1 *layer_shell;
+    //struct zwlr_layer_surface_v1 *layer_surface;
+    //struct zwlr_layer_shell_v1 *layer_shell;
+    struct xdg_toplevel *xdg_toplevel;
+    struct xdg_wm_base *xdg_wm_base;
+
+    struct wl_seat *seat;
 
     bool stop;
 };

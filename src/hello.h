@@ -19,8 +19,6 @@
 static const int width = 128;
 static const int height = 128;
 
-static struct xdg_wm_base *xdg_wm_base = NULL;
-static struct xdg_toplevel *xdg_toplevel = NULL;
 
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer, uint32_t serial,  wl_fixed_t x,  wl_fixed_t y)
 {
@@ -66,7 +64,7 @@ static void xdg_toplevel_handle_close(void *data, struct xdg_toplevel *xdg_tople
     _trace("xdg_toplevel_close[%p] top_level[%p]", data, xdg_toplevel);
 
     if (data == NULL) { return; }
-    struct nukebar *bar = (struct nukebar*)data;
+    struct nukebar *bar = data;
     bar->stop = true;
 }
 
@@ -80,10 +78,10 @@ static void pointer_handle_button(void *data, struct wl_pointer *pointer, uint32
     _trace("pointer_button[%p], pointer[%p] serial=%d, time=%d, but=%d, state=%d", data, pointer, serial, time, button, state);
     pointer = (void*)pointer;
     time = (uint32_t)time;
-    struct wl_seat *seat = data;
+    struct nukebar *bar = data;
 
     if (button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_PRESSED) {
-        xdg_toplevel_move(xdg_toplevel, seat, serial);
+        xdg_toplevel_move(bar->xdg_toplevel, bar->seat, serial);
     }
 }
 
@@ -99,7 +97,7 @@ static void seat_handle_capabilities(void *data, struct wl_seat *seat, uint32_t 
     _trace("seat_capabilities[%p], seat[%p], cap=%d", data, seat, capabilities);
     if (capabilities & WL_SEAT_CAPABILITY_POINTER) {
         struct wl_pointer *pointer = wl_seat_get_pointer(seat);
-        wl_pointer_add_listener(pointer, &pointer_listener, seat);
+        wl_pointer_add_listener(pointer, &pointer_listener, data);
     }
 }
 
@@ -118,12 +116,12 @@ static void handle_global(void *data, struct wl_registry *registry, uint32_t nam
     if (strcmp(interface, wl_shm_interface.name) == 0) {
         bar->shm = wl_registry_bind(bar->registry, name, &wl_shm_interface, 1);
     } else if (strcmp(interface, wl_seat_interface.name) == 0) {
-        struct wl_seat *seat = wl_registry_bind(bar->registry, name, &wl_seat_interface, 1);
-        wl_seat_add_listener(seat, &seat_listener, NULL);
+        bar->seat = wl_registry_bind(bar->registry, name, &wl_seat_interface, 1);
+        wl_seat_add_listener(bar->seat, &seat_listener, bar);
     } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
         bar->compositor = wl_registry_bind(bar->registry, name, &wl_compositor_interface, 1);
     } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
-        xdg_wm_base = wl_registry_bind(bar->registry, name, &xdg_wm_base_interface, 1);
+        bar->xdg_wm_base = wl_registry_bind(bar->registry, name, &xdg_wm_base_interface, 1);
     }
 }
 
@@ -183,7 +181,7 @@ int hello(struct nukebar *bar)
     wl_registry_add_listener(bar->registry, &registry_listener, bar);
     wl_display_roundtrip(bar->display);
 
-    if (bar->shm == NULL || bar->compositor == NULL || xdg_wm_base == NULL) {
+    if (bar->shm == NULL || bar->compositor == NULL || bar->xdg_wm_base == NULL) {
         _error("no wl_shm, wl_compositor or xdg_wm_base support\n");
         return EXIT_FAILURE;
     }
@@ -194,11 +192,11 @@ int hello(struct nukebar *bar)
     }
 
     bar->surface = wl_compositor_create_surface(bar->compositor);
-    struct xdg_surface *xdg_surface = xdg_wm_base_get_xdg_surface(xdg_wm_base, bar->surface);
-    xdg_toplevel = xdg_surface_get_toplevel(xdg_surface);
+    struct xdg_surface *xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
+    bar->xdg_toplevel = xdg_surface_get_toplevel(xdg_surface);
 
     xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, bar);
-    xdg_toplevel_add_listener(xdg_toplevel, &xdg_toplevel_listener, bar);
+    xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
 
     wl_surface_commit(bar->surface);
     wl_display_roundtrip(bar->display);
@@ -210,7 +208,7 @@ int hello(struct nukebar *bar)
         // This space intentionally left blank
     }
 
-    xdg_toplevel_destroy(xdg_toplevel);
+    xdg_toplevel_destroy(bar->xdg_toplevel);
     xdg_surface_destroy(xdg_surface);
     wl_surface_destroy(bar->surface);
     wl_buffer_destroy(buffer);
