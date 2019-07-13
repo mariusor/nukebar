@@ -1,24 +1,33 @@
 #ifndef NUKEBAR_HELLO_H
 #define NUKEBAR_HELLO_H
 
-#define _XOPEN_SOURCE 700
+#include <EGL/egl.h>
+#include <GLES2/gl2.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <unistd.h>
 #include <wayland-client.h>
 #include <wayland-client-protocol.h>
+#include <wayland-egl.h>
 #include <linux/input-event-codes.h>
 
 #include "cat.h"
-#include "shm.h"
 #include "xdg-shell-client-protocol.h"
 
 static const int width = 128;
 static const int height = 128;
 
+static EGLDisplay egl_display = NULL;
+static EGLContext egl_context = NULL;
+static EGLSurface egl_surface = NULL;
+
+static struct timespec last_frame = {0};
+static float color[3] = {0};
+static size_t dec = 0;
 
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer, uint32_t serial,  wl_fixed_t x,  wl_fixed_t y)
 {
@@ -113,9 +122,7 @@ static void handle_global(void *data, struct wl_registry *registry, uint32_t nam
         _warn("different registry pointers: %p vs %p", bar->registry, registry);
     }
     version = (uint32_t)version;
-    if (strcmp(interface, wl_shm_interface.name) == 0) {
-        bar->shm = wl_registry_bind(bar->registry, name, &wl_shm_interface, 1);
-    } else if (strcmp(interface, wl_seat_interface.name) == 0) {
+    if (strcmp(interface, wl_seat_interface.name) == 0) {
         bar->seat = wl_registry_bind(bar->registry, name, &wl_seat_interface, 1);
         wl_seat_add_listener(bar->seat, &seat_listener, bar);
     } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
@@ -142,31 +149,59 @@ static const struct wl_registry_listener registry_listener = {
     .global_remove = handle_global_remove,
 };
 
-static struct wl_buffer *create_buffer(struct wl_shm* shm)
-{
-    int stride = width * 4;
-    int size = stride * height;
+static void render(struct nukebar*);
 
-    int fd = create_shm_file(size);
-    if (fd < 0) {
-        _error("creating a buffer file for %d B failed: %m\n", size);
-        return NULL;
-    }
+static void frame_handle_done(void *data, struct wl_callback *callback, uint32_t time) {
+    _trace("callback%p, time=%d", callback, time);
+	wl_callback_destroy(callback);
+	render((struct nukebar*)data);
+}
 
-    void *shm_data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (shm_data == MAP_FAILED) {
-        _error("mmap failed: %s\n", strerror(errno));
-        close(fd);
-        return NULL;
-    }
+static const struct wl_callback_listener frame_listener = {
+	.done = frame_handle_done,
+};
 
-    struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
-    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
-    wl_shm_pool_destroy(pool);
+static void render(struct nukebar *bar) {
+	// Update color
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
 
-    // MagickImage is from cat.h
-    memcpy(shm_data, MagickImage, size);
-    return buffer;
+	long ms = (ts.tv_sec - last_frame.tv_sec) * 1000 + (ts.tv_nsec - last_frame.tv_nsec) / 1000000;
+	size_t inc = (dec + 1) % 3;
+	color[inc] += ms / 2000.0f;
+	color[dec] -= ms / 2000.0f;
+	if (color[dec] < 0.0f) {
+		color[inc] = 1.0f;
+		color[dec] = 0.0f;
+		dec = inc;
+	}
+	last_frame = ts;
+
+	// And draw a new frame
+	if (!eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context)) {
+		fprintf(stderr, "eglMakeCurrent failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	glClearColor(color[0], color[1], color[2], 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	// By default, eglSwapBuffers blocks until we receive the next frame event.
+	// This is undesirable since it makes it impossible to process other events
+	// (such as input events) while waiting for the next frame event. Setting
+	// the swap interval to zero and managing frame events manually prevents
+	// this behavior.
+	eglSwapInterval(egl_display, 0);
+
+	// Register a frame callback to know when we need to draw the next frame
+	struct wl_callback *callback = wl_surface_frame(bar->surface);
+	wl_callback_add_listener(callback, &frame_listener, bar);
+
+	// This will attach a new buffer and commit the surface
+	if (!eglSwapBuffers(egl_display, egl_surface)) {
+		fprintf(stderr, "eglSwapBuffers failed\n");
+		exit(EXIT_FAILURE);
+	}
 }
 
 int hello(struct nukebar *bar)
@@ -181,15 +216,51 @@ int hello(struct nukebar *bar)
     wl_registry_add_listener(bar->registry, &registry_listener, bar);
     wl_display_roundtrip(bar->display);
 
-    if (bar->shm == NULL || bar->compositor == NULL || bar->xdg_wm_base == NULL) {
-        _error("no wl_shm, wl_compositor or xdg_wm_base support\n");
+    if (bar->compositor == NULL || bar->xdg_wm_base == NULL) {
+        _error("no wl_compositor or xdg_wm_base support\n");
         return EXIT_FAILURE;
     }
 
-    struct wl_buffer *buffer = create_buffer(bar->shm);
-    if (buffer == NULL) {
-        return EXIT_FAILURE;
-    }
+	egl_display = eglGetDisplay((EGLNativeDisplayType)bar->display);
+	if (egl_display == EGL_NO_DISPLAY) {
+		fprintf(stderr, "failed to create EGL display\n");
+		return EXIT_FAILURE;
+	}
+
+	EGLint major, minor;
+	if (!eglInitialize(egl_display, &major, &minor)) {
+		fprintf(stderr, "failed to initialize EGL\n");
+		return EXIT_FAILURE;
+	}
+
+	EGLint count;
+	eglGetConfigs(egl_display, NULL, 0, &count);
+
+	EGLint config_attribs[] = {
+		EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+		EGL_RED_SIZE, 8,
+		EGL_GREEN_SIZE, 8,
+		EGL_BLUE_SIZE, 8,
+		EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+		EGL_NONE,
+	};
+	EGLint n = 0;
+	EGLConfig *configs = calloc(count, sizeof(EGLConfig));
+	eglChooseConfig(egl_display, config_attribs, configs, count, &n);
+	if (n == 0) {
+		fprintf(stderr, "failed to choose an EGL config\n");
+		return EXIT_FAILURE;
+	}
+	EGLConfig egl_config = configs[0];
+
+	EGLint context_attribs[] = {
+		EGL_CONTEXT_CLIENT_VERSION, 2,
+		EGL_NONE,
+	};
+	egl_context = eglCreateContext(egl_display, egl_config, EGL_NO_CONTEXT, context_attribs);
+
+	struct wl_egl_window *egl_window = wl_egl_window_create(bar->surface, width, height);
+	egl_surface = eglCreateWindowSurface(egl_display, egl_config, (EGLNativeWindowType)egl_window, NULL);
 
     bar->surface = wl_compositor_create_surface(bar->compositor);
     struct xdg_surface *xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
@@ -201,8 +272,8 @@ int hello(struct nukebar *bar)
     wl_surface_commit(bar->surface);
     wl_display_roundtrip(bar->display);
 
-    wl_surface_attach(bar->surface, buffer, 0, 0);
-    wl_surface_commit(bar->surface);
+	// Draw the first frame
+	render(bar);
 
     while (wl_display_dispatch(bar->display) != -1 && !bar->stop) {
         // This space intentionally left blank
@@ -211,7 +282,6 @@ int hello(struct nukebar *bar)
     xdg_toplevel_destroy(bar->xdg_toplevel);
     xdg_surface_destroy(xdg_surface);
     wl_surface_destroy(bar->surface);
-    wl_buffer_destroy(buffer);
     _info("exiting");
     return EXIT_SUCCESS;
 }

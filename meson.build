@@ -1,6 +1,6 @@
 project('nukebar', 'c',
         default_options : [
-            'c_std=c11',
+            'c_std=gnu11',
             'buildtype=debug',
             'warning_level=3',
         ],
@@ -15,19 +15,30 @@ if get_option('buildtype') == 'debug'
     add_project_arguments('-Werror', language : 'c')
     add_project_arguments('-DDEBUG', language : 'c')
 endif
+add_project_arguments('-I/usr/include/libdrm', language: 'c')
+add_project_arguments('-lEGL', language: 'c')
+add_project_arguments('-L/usr/lib64', language: 'c')
+add_project_arguments('-lGLESv2', language: 'c')
+add_project_arguments('-lrt', language: 'c')
 
+wayland_egl = dependency('wayland-egl', required: true)
 wayland_client = dependency('wayland-client', required: true)
 wayland_protos = dependency('wayland-protocols', version: '>=1.14', required: true)
+egl = dependency('egl', required: true)
+glesv2 = dependency('glesv2', required: true)
 
 cc = meson.get_compiler('c')
-realtime = cc.find_library('rt', required: true)
+#realtime = cc.find_library('rt', required: true)
 #nuklear = c.find_library('nuklear')
 
 subdir('protocol')
 
 deps = [
-    realtime,
+#    realtime,
 #    nuklear,
+    wayland_egl,
+    egl,
+    glesv2,
     wayland_client,
     wayland_protos,
     client_protos
@@ -37,12 +48,12 @@ version_hash = get_option('version')
 
 prefixdir = get_option('prefix')
 if not prefixdir.startswith('/')
-        error('Prefix is not absolute: "@0@"'.format(prefixdir))
+    error('Prefix is not absolute: "@0@"'.format(prefixdir))
 endif
 bindir = join_paths(prefixdir, get_option('bindir'))
 
 srcdir = [
-  include_directories('src'),
+    include_directories('src'),
 ]
 
 sources = ['src/bar.c']
