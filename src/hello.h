@@ -213,6 +213,7 @@ int hello(struct nukebar *bar)
 
     bar->registry = wl_display_get_registry(bar->display);
     wl_registry_add_listener(bar->registry, &registry_listener, bar);
+	wl_display_dispatch(bar->display);
     wl_display_roundtrip(bar->display);
 
     if (bar->compositor == NULL || bar->xdg_wm_base == NULL) {
@@ -258,15 +259,15 @@ int hello(struct nukebar *bar)
     };
     egl_context = eglCreateContext(egl_display, egl_config, EGL_NO_CONTEXT, context_attribs);
 
-    struct wl_egl_window *egl_window = wl_egl_window_create(bar->surface, width, height);
-    egl_surface = eglCreateWindowSurface(egl_display, egl_config, (EGLNativeWindowType)egl_window, NULL);
-
     bar->surface = wl_compositor_create_surface(bar->compositor);
     struct xdg_surface *xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
     bar->xdg_toplevel = xdg_surface_get_toplevel(xdg_surface);
 
     xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, bar);
     xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
+
+    struct wl_egl_window *egl_window = wl_egl_window_create(bar->surface, width, height);
+    egl_surface = eglCreateWindowSurface(egl_display, egl_config, (EGLNativeWindowType)egl_window, NULL);
 
     wl_surface_commit(bar->surface);
     wl_display_roundtrip(bar->display);
