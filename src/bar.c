@@ -4,7 +4,7 @@
 
 #include "structs.h"
 #include "utils.h"
-#include "hello.h"
+#include "wayland.h"
 #include "version.h"
 
 #define ARG_HELP        "help"
@@ -56,9 +56,18 @@ int main(int argc, char** argv)
     struct nukebar bar = {0};
     _trace2("Started bar %p:%u", &bar, sizeof(bar));
 
-    int status = hello(&bar);
+    if (!wayland_init(&bar)) {
+        goto _failure;
+    }
+    // Draw the first frame
+    render(&bar);
+
+    while (wl_display_dispatch(bar.display) != -1 && !bar.stop) {
+        // This space intentionally left blank
+    }
+    wayland_destroy(&bar);
 _success:
-    return status;
+    return EXIT_SUCCESS;
 _failure:
     return EXIT_FAILURE;
 _help:

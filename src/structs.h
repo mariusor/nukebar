@@ -21,6 +21,7 @@ struct nukebar {
     //struct zwlr_layer_shell_v1 *layer_shell;
     struct xdg_toplevel *xdg_toplevel;
     struct xdg_wm_base *xdg_wm_base;
+    struct xdg_surface *xdg_surface;
 
     struct wl_seat *seat;
 

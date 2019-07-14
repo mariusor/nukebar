@@ -2,12 +2,8 @@
 #define NUKEBAR_HELLO_H
 
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
 #include <time.h>
-#include <unistd.h>
 #include <wayland-client.h>
 #include <wayland-client-protocol.h>
 #include <wayland-egl.h>
@@ -173,7 +169,7 @@ static void render(struct nukebar *bar) {
     // And draw a new frame
     if (!eglMakeCurrent(bar->egl_display, bar->egl_surface, bar->egl_surface, bar->egl_context)) {
         _error("eglMakeCurrent failed");
-        exit(EXIT_FAILURE);
+        exit(false);
     }
 
     glClearColor(color[0], color[1], color[2], 1.0);
@@ -193,16 +189,16 @@ static void render(struct nukebar *bar) {
     // This will attach a new buffer and commit the surface
     if (!eglSwapBuffers(bar->egl_display, bar->egl_surface)) {
         _error("eglSwapBuffers failed");
-        exit(EXIT_FAILURE);
+        exit(false);
     }
 }
 
-int hello(struct nukebar *bar)
+bool wayland_init(struct nukebar *bar)
 {
     bar->display = wl_display_connect(NULL);
     if (bar->display == NULL) {
         _error("failed to create display");
-        return EXIT_FAILURE;
+        return false;
     }
 
     bar->registry = wl_display_get_registry(bar->display);
@@ -212,19 +208,19 @@ int hello(struct nukebar *bar)
 
     if (bar->compositor == NULL || bar->xdg_wm_base == NULL) {
         _error("no wl_compositor or xdg_wm_base support");
-        return EXIT_FAILURE;
+        return false;
     }
 
     bar->egl_display = eglGetDisplay((EGLNativeDisplayType)bar->display);
     if (bar->egl_display == EGL_NO_DISPLAY) {
         _error("failed to create EGL display");
-        return EXIT_FAILURE;
+        return false;
     }
 
     EGLint major, minor;
     if (!eglInitialize(bar->egl_display, &major, &minor)) {
         _error("failed to initialize EGL");
-        return EXIT_FAILURE;
+        return false;
     }
 
     EGLint count;
@@ -243,7 +239,7 @@ int hello(struct nukebar *bar)
     eglChooseConfig(bar->egl_display, config_attribs, configs, count, &n);
     if (n == 0) {
         _error("failed to choose an EGL config");
-        return EXIT_FAILURE;
+        return false;
     }
     EGLConfig egl_config = configs[0];
 
@@ -254,10 +250,10 @@ int hello(struct nukebar *bar)
     bar->egl_context = eglCreateContext(bar->egl_display, egl_config, EGL_NO_CONTEXT, context_attribs);
 
     bar->surface = wl_compositor_create_surface(bar->compositor);
-    struct xdg_surface *xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
-    bar->xdg_toplevel = xdg_surface_get_toplevel(xdg_surface);
+    bar->xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
+    bar->xdg_toplevel = xdg_surface_get_toplevel(bar->xdg_surface);
 
-    xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, bar);
+    xdg_surface_add_listener(bar->xdg_surface, &xdg_surface_listener, bar);
     xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
 
     struct wl_egl_window *egl_window = wl_egl_window_create(bar->surface, width, height);
@@ -266,17 +262,14 @@ int hello(struct nukebar *bar)
     wl_surface_commit(bar->surface);
     wl_display_roundtrip(bar->display);
 
-    // Draw the first frame
-    render(bar);
-
-    while (wl_display_dispatch(bar->display) != -1 && !bar->stop) {
-        // This space intentionally left blank
-    }
-
-    xdg_toplevel_destroy(bar->xdg_toplevel);
-    xdg_surface_destroy(xdg_surface);
-    wl_surface_destroy(bar->surface);
-    _info("exiting");
-    return EXIT_SUCCESS;
+    return true;
 }
+
+void wayland_destroy(struct nukebar *bar)
+{
+    xdg_toplevel_destroy(bar->xdg_toplevel);
+    xdg_surface_destroy(bar->xdg_surface);
+    wl_surface_destroy(bar->surface);
+}
+
 #endif // NUKEBAR_HELLO_H
