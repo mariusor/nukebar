@@ -1,6 +1,8 @@
 #ifndef NUKEBAR_STRUCTS_H
 #define NUKEBAR_STRUCTS_H
 
+#include <EGL/egl.h>
+#include <GLES2/gl2.h>
 #include <stdbool.h>
 #include <wayland-client.h>
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
@@ -21,6 +23,10 @@ struct nukebar {
     struct xdg_wm_base *xdg_wm_base;
 
     struct wl_seat *seat;
+
+    EGLDisplay egl_display;
+    EGLContext egl_context;
+    EGLSurface egl_surface;
 
     bool stop;
 };

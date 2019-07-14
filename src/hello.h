@@ -1,8 +1,6 @@
 #ifndef NUKEBAR_HELLO_H
 #define NUKEBAR_HELLO_H
 
-#include <EGL/egl.h>
-#include <GLES2/gl2.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,10 +17,6 @@
 
 static const int width = 128;
 static const int height = 128;
-
-static EGLDisplay egl_display = NULL;
-static EGLContext egl_context = NULL;
-static EGLSurface egl_surface = NULL;
 
 static struct timespec last_frame = {0};
 static float color[3] = {0};
@@ -177,7 +171,7 @@ static void render(struct nukebar *bar) {
     last_frame = ts;
 
     // And draw a new frame
-    if (!eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context)) {
+    if (!eglMakeCurrent(bar->egl_display, bar->egl_surface, bar->egl_surface, bar->egl_context)) {
         _error("eglMakeCurrent failed");
         exit(EXIT_FAILURE);
     }
@@ -190,14 +184,14 @@ static void render(struct nukebar *bar) {
     // (such as input events) while waiting for the next frame event. Setting
     // the swap interval to zero and managing frame events manually prevents
     // this behavior.
-    eglSwapInterval(egl_display, 0);
+    eglSwapInterval(bar->egl_display, 0);
 
     // Register a frame callback to know when we need to draw the next frame
     struct wl_callback *callback = wl_surface_frame(bar->surface);
     wl_callback_add_listener(callback, &frame_listener, bar);
 
     // This will attach a new buffer and commit the surface
-    if (!eglSwapBuffers(egl_display, egl_surface)) {
+    if (!eglSwapBuffers(bar->egl_display, bar->egl_surface)) {
         _error("eglSwapBuffers failed");
         exit(EXIT_FAILURE);
     }
@@ -221,20 +215,20 @@ int hello(struct nukebar *bar)
         return EXIT_FAILURE;
     }
 
-    egl_display = eglGetDisplay((EGLNativeDisplayType)bar->display);
-    if (egl_display == EGL_NO_DISPLAY) {
+    bar->egl_display = eglGetDisplay((EGLNativeDisplayType)bar->display);
+    if (bar->egl_display == EGL_NO_DISPLAY) {
         _error("failed to create EGL display");
         return EXIT_FAILURE;
     }
 
     EGLint major, minor;
-    if (!eglInitialize(egl_display, &major, &minor)) {
+    if (!eglInitialize(bar->egl_display, &major, &minor)) {
         _error("failed to initialize EGL");
         return EXIT_FAILURE;
     }
 
     EGLint count;
-    eglGetConfigs(egl_display, NULL, 0, &count);
+    eglGetConfigs(bar->egl_display, NULL, 0, &count);
 
     EGLint config_attribs[] = {
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
@@ -246,7 +240,7 @@ int hello(struct nukebar *bar)
     };
     EGLint n = 0;
     EGLConfig *configs = calloc(count, sizeof(EGLConfig));
-    eglChooseConfig(egl_display, config_attribs, configs, count, &n);
+    eglChooseConfig(bar->egl_display, config_attribs, configs, count, &n);
     if (n == 0) {
         _error("failed to choose an EGL config");
         return EXIT_FAILURE;
@@ -257,7 +251,7 @@ int hello(struct nukebar *bar)
         EGL_CONTEXT_CLIENT_VERSION, 2,
         EGL_NONE,
     };
-    egl_context = eglCreateContext(egl_display, egl_config, EGL_NO_CONTEXT, context_attribs);
+    bar->egl_context = eglCreateContext(bar->egl_display, egl_config, EGL_NO_CONTEXT, context_attribs);
 
     bar->surface = wl_compositor_create_surface(bar->compositor);
     struct xdg_surface *xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
@@ -267,7 +261,7 @@ int hello(struct nukebar *bar)
     xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
 
     struct wl_egl_window *egl_window = wl_egl_window_create(bar->surface, width, height);
-    egl_surface = eglCreateWindowSurface(egl_display, egl_config, (EGLNativeWindowType)egl_window, NULL);
+    bar->egl_surface = eglCreateWindowSurface(bar->egl_display, egl_config, (EGLNativeWindowType)egl_window, NULL);
 
     wl_surface_commit(bar->surface);
     wl_display_roundtrip(bar->display);
