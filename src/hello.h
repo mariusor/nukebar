@@ -15,7 +15,6 @@
 #include <wayland-egl.h>
 #include <linux/input-event-codes.h>
 
-#include "cat.h"
 #include "xdg-shell-client-protocol.h"
 
 static const int width = 128;
