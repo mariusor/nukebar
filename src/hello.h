@@ -178,7 +178,7 @@ static void render(struct nukebar *bar) {
 
     // And draw a new frame
     if (!eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context)) {
-        fprintf(stderr, "eglMakeCurrent failed\n");
+        _error("eglMakeCurrent failed");
         exit(EXIT_FAILURE);
     }
 
@@ -198,7 +198,7 @@ static void render(struct nukebar *bar) {
 
     // This will attach a new buffer and commit the surface
     if (!eglSwapBuffers(egl_display, egl_surface)) {
-        fprintf(stderr, "eglSwapBuffers failed\n");
+        _error("eglSwapBuffers failed");
         exit(EXIT_FAILURE);
     }
 }
@@ -207,7 +207,7 @@ int hello(struct nukebar *bar)
 {
     bar->display = wl_display_connect(NULL);
     if (bar->display == NULL) {
-        _error("failed to create display\n");
+        _error("failed to create display");
         return EXIT_FAILURE;
     }
 
@@ -216,19 +216,19 @@ int hello(struct nukebar *bar)
     wl_display_roundtrip(bar->display);
 
     if (bar->compositor == NULL || bar->xdg_wm_base == NULL) {
-        _error("no wl_compositor or xdg_wm_base support\n");
+        _error("no wl_compositor or xdg_wm_base support");
         return EXIT_FAILURE;
     }
 
     egl_display = eglGetDisplay((EGLNativeDisplayType)bar->display);
     if (egl_display == EGL_NO_DISPLAY) {
-        fprintf(stderr, "failed to create EGL display\n");
+        _error("failed to create EGL display");
         return EXIT_FAILURE;
     }
 
     EGLint major, minor;
     if (!eglInitialize(egl_display, &major, &minor)) {
-        fprintf(stderr, "failed to initialize EGL\n");
+        _error("failed to initialize EGL");
         return EXIT_FAILURE;
     }
 
@@ -247,7 +247,7 @@ int hello(struct nukebar *bar)
     EGLConfig *configs = calloc(count, sizeof(EGLConfig));
     eglChooseConfig(egl_display, config_attribs, configs, count, &n);
     if (n == 0) {
-        fprintf(stderr, "failed to choose an EGL config\n");
+        _error("failed to choose an EGL config");
         return EXIT_FAILURE;
     }
     EGLConfig egl_config = configs[0];
