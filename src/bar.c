@@ -37,9 +37,6 @@ void print_help(char* name)
 
 int main(int argc, char** argv)
 {
-    argc = (int)argc;
-    argv = (char**)argv;
-
     _log_level = log_tracing2 | log_tracing | log_debug | log_info | log_debug | log_error;
 
     if (argc < 0) {
