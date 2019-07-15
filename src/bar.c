@@ -60,7 +60,7 @@ int main(int argc, char** argv)
         goto _failure;
     }
     // Draw the first frame
-    render(&bar);
+    render(&bar, 0);
 
     while (wl_display_dispatch(bar.display) != -1 && !bar.stop) {
         // This space intentionally left blank

@@ -11,10 +11,6 @@
 
 #include "xdg-shell-client-protocol.h"
 
-static const int width = 128;
-static const int height = 128;
-
-static struct timespec last_frame = {0};
 static float color[3] = {0};
 static size_t dec = 0;
 
@@ -41,6 +37,13 @@ static void pointer_handle_axis(void *data, struct wl_pointer *pointer, uint32_t
 static void xdg_toplevel_handle_configure(void *data, struct xdg_toplevel *top, int32_t x, int32_t y, struct wl_array *list)
 {
     _trace("xdg_toplevel_configure[%p], xdg_toplevel[%p] [%d,%d] arr[%p]", data, top, x, y, list);
+    struct nukebar *bar = data;
+    if (x != bar->width || y != bar->height) {
+        wl_egl_window_resize(bar->window, x, y, x - bar->width, y - bar->height);
+
+        bar->width = x;
+        bar->height = y;
+    }
 }
 
 static void xdg_surface_handle_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial)
@@ -138,13 +141,14 @@ static const struct wl_registry_listener registry_listener = {
     .global_remove = handle_global_remove,
 };
 
-static bool render(struct nukebar*);
+static bool render(struct nukebar*, uint32_t);
 
 static void frame_handle_done(void *data, struct wl_callback *callback, uint32_t time) {
-    _trace("callback%p, time=%d", callback, time);
+    //_trace("callback%p, time=%d", callback, time);
+    time = time;
     wl_callback_destroy(callback);
     struct nukebar *bar = data;
-    if (!render(bar)) {
+    if (!render(bar, time)) {
         bar->stop = true;
     }
 }
@@ -153,12 +157,17 @@ static const struct wl_callback_listener frame_listener = {
     .done = frame_handle_done,
 };
 
-static bool render(struct nukebar *bar) {
-    // Update color
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
+static bool render(struct nukebar *bar, uint32_t time) {
+    uint32_t sec = time / 1000;
+    uint32_t usec = time * 1000000L - (sec * 1000);
 
-    long ms = (ts.tv_sec - last_frame.tv_sec) * 1000 + (ts.tv_nsec - last_frame.tv_nsec) / 1000000;
+    struct timespec ts = {
+        .tv_sec = sec,
+        .tv_nsec = usec,
+    };
+
+    long ms = (ts.tv_sec - bar->last_frame.tv_sec) * 1000 + (ts.tv_nsec - bar->last_frame.tv_nsec) / 1000000;
+    //_trace("time %d - ms %d", time, ms);
     size_t inc = (dec + 1) % 3;
     color[inc] += ms / 2000.0f;
     color[dec] -= ms / 2000.0f;
@@ -167,7 +176,7 @@ static bool render(struct nukebar *bar) {
         color[dec] = 0.0f;
         dec = inc;
     }
-    last_frame = ts;
+    bar->last_frame = ts;
 
     // And draw a new frame
     if (!eglMakeCurrent(bar->egl_display, bar->egl_surface, bar->egl_surface, bar->egl_context)) {
@@ -200,6 +209,8 @@ static bool render(struct nukebar *bar) {
 
 bool wayland_init(struct nukebar *bar)
 {
+    bar->width = 128;
+    bar->height = 128;
     bar->display = wl_display_connect(NULL);
     if (bar->display == NULL) {
         _error("failed to create display");
@@ -262,7 +273,7 @@ bool wayland_init(struct nukebar *bar)
     xdg_surface_add_listener(bar->xdg_surface, &xdg_surface_listener, bar);
     xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
 
-    bar->window = wl_egl_window_create(bar->surface, width, height);
+    bar->window = wl_egl_window_create(bar->surface, bar->width, bar->height);
     bar->egl_surface = eglCreateWindowSurface(bar->egl_display, egl_config, (EGLNativeWindowType)bar->window, NULL);
 
     wl_surface_commit(bar->surface);
@@ -283,6 +294,8 @@ void wayland_destroy(struct nukebar *bar)
             eglDestroySurface(bar->egl_display, bar->egl_surface);
         }
         eglTerminate(bar->egl_display);
+
+        wl_egl_window_destroy(bar->window);
     }
     if (NULL != bar->xdg_toplevel) {
         xdg_toplevel_destroy(bar->xdg_toplevel);

@@ -30,6 +30,10 @@ struct nukebar {
     EGLContext egl_context;
     EGLSurface egl_surface;
 
+    int32_t width;
+    int32_t height;
+    struct timespec last_frame;
+
     bool stop;
 };
 #endif // NUKEBAR_STRUCTS_H
