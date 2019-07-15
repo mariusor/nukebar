@@ -138,19 +138,22 @@ static const struct wl_registry_listener registry_listener = {
     .global_remove = handle_global_remove,
 };
 
-static void render(struct nukebar*);
+static bool render(struct nukebar*);
 
 static void frame_handle_done(void *data, struct wl_callback *callback, uint32_t time) {
     _trace("callback%p, time=%d", callback, time);
     wl_callback_destroy(callback);
-    render((struct nukebar*)data);
+    struct nukebar *bar = data;
+    if (!render(bar)) {
+        bar->stop = true;
+    }
 }
 
 static const struct wl_callback_listener frame_listener = {
     .done = frame_handle_done,
 };
 
-static void render(struct nukebar *bar) {
+static bool render(struct nukebar *bar) {
     // Update color
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -169,7 +172,7 @@ static void render(struct nukebar *bar) {
     // And draw a new frame
     if (!eglMakeCurrent(bar->egl_display, bar->egl_surface, bar->egl_surface, bar->egl_context)) {
         _error("eglMakeCurrent failed");
-        exit(false);
+        return false;
     }
 
     glClearColor(color[0], color[1], color[2], 1.0);
@@ -189,8 +192,10 @@ static void render(struct nukebar *bar) {
     // This will attach a new buffer and commit the surface
     if (!eglSwapBuffers(bar->egl_display, bar->egl_surface)) {
         _error("eglSwapBuffers failed");
-        exit(false);
+        return false;
     }
+
+    return true;
 }
 
 bool wayland_init(struct nukebar *bar)
@@ -239,6 +244,7 @@ bool wayland_init(struct nukebar *bar)
     eglChooseConfig(bar->egl_display, config_attribs, configs, count, &n);
     if (n == 0) {
         _error("failed to choose an EGL config");
+        free(configs);
         return false;
     }
     EGLConfig egl_config = configs[0];
@@ -256,20 +262,47 @@ bool wayland_init(struct nukebar *bar)
     xdg_surface_add_listener(bar->xdg_surface, &xdg_surface_listener, bar);
     xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
 
-    struct wl_egl_window *egl_window = wl_egl_window_create(bar->surface, width, height);
-    bar->egl_surface = eglCreateWindowSurface(bar->egl_display, egl_config, (EGLNativeWindowType)egl_window, NULL);
+    bar->window = wl_egl_window_create(bar->surface, width, height);
+    bar->egl_surface = eglCreateWindowSurface(bar->egl_display, egl_config, (EGLNativeWindowType)bar->window, NULL);
 
     wl_surface_commit(bar->surface);
     wl_display_roundtrip(bar->display);
+
+    free(configs);
 
     return true;
 }
 
 void wayland_destroy(struct nukebar *bar)
 {
-    xdg_toplevel_destroy(bar->xdg_toplevel);
-    xdg_surface_destroy(bar->xdg_surface);
-    wl_surface_destroy(bar->surface);
+    if (NULL != bar->egl_display) {
+        if (NULL != bar->egl_context) {
+            eglDestroyContext(bar->egl_display, bar->egl_context);
+        }
+        if (NULL != bar->egl_surface) {
+            eglDestroySurface(bar->egl_display, bar->egl_surface);
+        }
+        eglTerminate(bar->egl_display);
+    }
+    if (NULL != bar->xdg_toplevel) {
+        xdg_toplevel_destroy(bar->xdg_toplevel);
+    }
+    if (NULL != bar->xdg_surface) {
+        xdg_surface_destroy(bar->xdg_surface);
+    }
+    if (NULL != bar->surface) {
+        wl_surface_destroy(bar->surface);
+    }
+    if (NULL != bar->compositor) {
+        wl_compositor_destroy(bar->compositor);
+    }
+    if (NULL != bar->registry) {
+        wl_registry_destroy(bar->registry);
+    }
+    if (NULL != bar->display) {
+        wl_display_disconnect(bar->display);
+    }
+    _info("destroyed everything");
 }
 
 #endif // NUKEBAR_HELLO_H

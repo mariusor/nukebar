@@ -58,18 +58,15 @@ int _logd(enum log_levels level, const char *file, const char *function, const i
     va_start(args, format);
 
     const char *label = get_log_level(level);
-    size_t p_len = strlen(LOG_WARNING_LABEL) + 1;
 
-    char *suffix = calloc(1, 1024);
+    char suffix[1024] = {0};
     snprintf(suffix, 1024, " in %s:%d::%s()\n", file, line, function);
 
     size_t s_len = strlen(suffix);
     size_t f_len = strlen(format);
-    size_t full_len = p_len + f_len + s_len + 1;
 
-    char log_format[full_len];
-    memset(log_format, 0x0, full_len);
-    snprintf(log_format, p_len + 1, "%-7s ", label);
+    char log_format[1024] = {0};
+    snprintf(log_format, 1024, "%-7s ", label);
 
     strncat(log_format, format, f_len + 1);
     strncat(log_format, suffix, s_len + 1);

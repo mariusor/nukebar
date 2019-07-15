@@ -9,10 +9,11 @@
 #include "xdg-output-unstable-v1-client-protocol.h"
 
 struct nukebar {
+    struct wl_egl_window *window;
     struct wl_display *display;
     struct wl_registry *registry;
     struct wl_compositor *compositor;
-    struct wl_shm *shm;
+    //struct wl_shm *shm;
     //struct wl_list outputs;
     //struct wl_list seats;
 
