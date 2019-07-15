@@ -28,14 +28,10 @@ egl = dependency('egl', required: true)
 glesv2 = dependency('glesv2', required: true)
 
 cc = meson.get_compiler('c')
-#realtime = cc.find_library('rt', required: true)
-#nuklear = c.find_library('nuklear')
 
 subdir('protocol')
 
 deps = [
-#    realtime,
-#    nuklear,
     wayland_egl,
     egl,
     glesv2,
