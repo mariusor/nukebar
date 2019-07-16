@@ -43,9 +43,14 @@ static bool render(struct nukebar *bar, uint32_t time) {
     // this behavior.
     eglSwapInterval(bar->egl_display, 0);
 
-    // Register a frame callback to know when we need to draw the next frame
+    zwlr_layer_surface_v1_set_size(bar->layer_surface, bar->width, bar->height);
+    zwlr_layer_surface_v1_set_margin(bar->layer_surface, 0, 0, 0, 0);
+
     struct wl_callback *callback = wl_surface_frame(bar->surface);
     wl_callback_add_listener(callback, &frame_listener, bar);
+
+    wl_surface_commit(bar->surface);
+    wl_surface_damage(bar->surface, 0, 0, bar->width, bar->height);
 
     // This will attach a new buffer and commit the surface
     if (!eglSwapBuffers(bar->egl_display, bar->egl_surface)) {

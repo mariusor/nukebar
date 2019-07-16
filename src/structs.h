@@ -46,14 +46,11 @@ struct nukebar {
     //struct wl_list outputs;
     //struct wl_list seats;
 
-    struct xdg_toplevel *xdg_toplevel;
-    struct xdg_wm_base *xdg_wm_base;
-    struct xdg_surface *xdg_surface;
-
-    struct zwlr_layer_surface_v1 *layer_surface;
-	struct zxdg_output_manager_v1 *xdg_output_manager;
-	struct zxdg_output_v1 *xdg_output;
     struct zwlr_layer_shell_v1 *layer_shell;
+    struct zwlr_layer_surface_v1 *layer_surface;
+
+    struct zxdg_output_manager_v1 *xdg_output_manager;
+    struct zxdg_output_v1 *xdg_output;
 
     EGLDisplay egl_display;
     EGLContext egl_context;
