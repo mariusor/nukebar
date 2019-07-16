@@ -49,7 +49,7 @@ static void xdg_surface_handle_configure(void *data, struct xdg_surface *xdg_sur
     _trace("xdg_surface[%p], serial=%d data[%p]", xdg_surface, serial, data);
 
     if (data == NULL) { return; }
-    struct nukebar* bar = (struct nukebar*)data;
+    struct nukebar* bar = data;
     xdg_surface_ack_configure(xdg_surface, serial);
     wl_surface_commit(bar->surface);
 }
@@ -104,28 +104,153 @@ static const struct wl_seat_listener seat_listener = {
     .capabilities = seat_handle_capabilities,
 };
 
+static void output_mode(void *data, struct wl_output *wl_output, uint32_t flags, int32_t width, int32_t height, int32_t refresh)
+{
+    _trace("output_mode[%p] wl_output[%p] flags=%d, size:%dx%d refresh=%d", data, wl_output, flags, width, height, refresh);
+}
+
+static void output_done(void *data, struct wl_output *wl_output) {
+    _trace("output_done[%p] wl_output[%p]", data, wl_output);
+}
+
+static void output_scale(void *data, struct wl_output *wl_output, int32_t factor) {
+    _trace("output_scale[%p] wl_output[%p] factor=%d", data, wl_output, factor);
+}
+
+
+static void output_geometry(void *data, struct wl_output *wl_output, int32_t x, int32_t y, int32_t width_mm, int32_t height_mm, int32_t subpixel, const char *make, const char *model, int32_t transform)
+{
+    _trace("output_geometry[%p] wl_output[%p] pos: %dx%d size(mm):%dx%d subpixel=%d, %s-%s-%s %d", data, wl_output, x, y, width_mm, height_mm, subpixel, make, model, transform);
+}
+
+struct wl_output_listener output_listener = {
+    .geometry = output_geometry,
+    .mode = output_mode,
+    .done = output_done,
+    .scale = output_scale,
+};
+static void xdg_output_handle_logical_position(void *data, struct zxdg_output_v1 *xdg_output, int32_t x, int32_t y)
+{
+    _trace("xdg_output_local_position[%p] xdg_output[%p] pos: %dx%d", data, xdg_output, x, y);
+    struct nukebar *bar = data;
+    bar->x = x;
+    bar->y = y;
+}
+
+static void xdg_output_handle_logical_size(void *data, struct zxdg_output_v1 *xdg_output, int32_t width, int32_t height)
+{
+    _trace("xdg_output_local_size[%p] xdg_output[%p] size: %dx%d", data, xdg_output, width, height);
+    struct nukebar *bar = data;
+    bar->height = height;
+    bar->width = width;
+}
+
+static void xdg_output_handle_done(void *data, struct zxdg_output_v1 *xdg_output)
+{
+    _trace("xdg_output_done[%p] xdg_output[%p]", data, xdg_output);
+    struct nukebar *bar = data;
+    bar->surface = wl_compositor_create_surface(bar->compositor);
+
+    //determine_bar_visibility(bar, false);
+}
+
+static void xdg_output_handle_name(void *data, struct zxdg_output_v1 *xdg_output, const char *name)
+{
+    _trace("xdg_output_name[%p] xdg_output[%p] name=%s", data, xdg_output, name);
+}
+
+static void xdg_output_handle_description(void *data, struct zxdg_output_v1 *xdg_output, const char *description)
+{
+    _trace("xdg_output_description[%p] xdg_output[%p] description=%s", data, xdg_output, description);
+}
+
+struct zxdg_output_v1_listener xdg_output_listener = {
+    .logical_position = xdg_output_handle_logical_position,
+    .logical_size = xdg_output_handle_logical_size,
+    .done = xdg_output_handle_done,
+    .name = xdg_output_handle_name,
+    .description = xdg_output_handle_description,
+};
+
+static void add_xdg_output(struct nukebar *bar) {
+    if (bar->xdg_output != NULL) {
+        return;
+    }
+    bar->xdg_output = zxdg_output_manager_v1_get_xdg_output(bar->xdg_output_manager, bar->output);
+    zxdg_output_v1_add_listener(bar->xdg_output, &xdg_output_listener, bar->output);
+}
+
+static void destroy_layer_surface(struct nukebar *bar) {
+    if (!bar->layer_surface) {
+        return;
+    }
+    zwlr_layer_surface_v1_destroy(bar->layer_surface);
+    wl_surface_attach(bar->surface, NULL, 0, 0); // detach buffer
+    bar->layer_surface = NULL;
+    bar->width = 0;
+    //output->frame_scheduled = false;
+}
+
+static void layer_surface_closed(void *data, struct zwlr_layer_surface_v1 *surface) {
+    struct nukebar *bar = data;
+    destroy_layer_surface(bar);
+    _trace("layer_surface_closed[%p] %p", bar, surface);
+}
+
+static void layer_surface_configure(void *data, struct zwlr_layer_surface_v1 *surface, uint32_t serial, uint32_t width, uint32_t height)
+{
+    struct nukebar *bar = data;
+    bar->width = width;
+    bar->height = height;
+    zwlr_layer_surface_v1_ack_configure(surface, serial);
+    //set_output_dirty(bar);
+}
+
+struct zwlr_layer_surface_v1_listener layer_surface_listener = {
+    .configure = layer_surface_configure,
+    .closed = layer_surface_closed,
+};
+
+static void add_layer_surface(struct nukebar *bar)
+{
+    bar->layer_surface = zwlr_layer_shell_v1_get_layer_surface(bar->layer_shell, bar->surface, bar->output, ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM, "panel");
+    uint32_t pos = 0;
+    zwlr_layer_surface_v1_add_listener(bar->layer_surface, &layer_surface_listener, bar->output);
+    zwlr_layer_surface_v1_set_anchor(bar->layer_surface, pos);
+}
+
 static void handle_global(void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version)
 {
-    struct nukebar* bar  = (struct nukebar*)data;
+    struct nukebar* bar  = data;
     _trace("%45s[%03d:%d]: data[%p], registry[%p]", interface, name, version, data, bar->registry);
     if (bar->registry != registry) {
         _warn("different registry pointers: %p vs %p", bar->registry, registry);
     }
     version = (uint32_t)version;
-    if (strcmp(interface, wl_seat_interface.name) == 0) {
-        bar->seat = wl_registry_bind(bar->registry, name, &wl_seat_interface, 1);
-        wl_seat_add_listener(bar->seat, &seat_listener, bar);
-    } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
-        bar->compositor = wl_registry_bind(bar->registry, name, &wl_compositor_interface, 1);
+    if (strcmp(interface, wl_compositor_interface.name) == 0) {
+        bar->compositor = wl_registry_bind(registry, name, &wl_compositor_interface, 4);
     } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
-        bar->xdg_wm_base = wl_registry_bind(bar->registry, name, &xdg_wm_base_interface, 1);
+        bar->xdg_wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
+    } else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
+        bar->layer_shell = wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
+    } else if (strcmp(interface, zxdg_output_manager_v1_interface.name) == 0) {
+        bar->xdg_output_manager = wl_registry_bind(registry, name, &zxdg_output_manager_v1_interface, 2);
+    }else if (strcmp(interface, wl_seat_interface.name) == 0) {
+        bar->seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
+        wl_seat_add_listener(bar->seat, &seat_listener, bar);
+    } else if (strcmp(interface, wl_output_interface.name) == 0) {
+        bar->output = wl_registry_bind(registry, name, &wl_output_interface, 3);
+        wl_output_add_listener(bar->output, &output_listener, bar);
+        if (bar->xdg_output_manager != NULL) {
+            add_xdg_output(bar);
+        }
     }
 }
 
 static void handle_global_remove(void *data, struct wl_registry *registry, uint32_t name)
 {
     _trace("data pointer %p", data);
-    struct nukebar *bar  = (void*)data;
+    struct nukebar *bar  = data;
     registry = (void*)registry;
     if (bar->registry != registry) {
         _warn("registry pointers are different, %p vs %p", bar->registry, registry);
@@ -145,7 +270,9 @@ static void frame_handle_done(void *data, struct wl_callback *callback, uint32_t
     time = time;
     wl_callback_destroy(callback);
     struct nukebar *bar = data;
+
     if (!render(bar, time)) {
+        _error("failed to render frame, stopping.");
         bar->stop = true;
     }
 }
@@ -154,10 +281,20 @@ static const struct wl_callback_listener frame_listener = {
     .done = frame_handle_done,
 };
 
+/*
+static void set_output_dirty(struct nukebar *bar)
+{
+    if (bar->surface) {
+        render(bar, 0);
+    }
+}
+*/
+
 bool wayland_init(struct nukebar *bar)
 {
-    bar->width = 128;
-    bar->height = 128;
+    bar->width = 1;
+    bar->height = 1;
+
     bar->display = wl_display_connect(NULL);
     if (bar->display == NULL) {
         _error("failed to create display");
@@ -166,8 +303,15 @@ bool wayland_init(struct nukebar *bar)
 
     bar->registry = wl_display_get_registry(bar->display);
     wl_registry_add_listener(bar->registry, &registry_listener, bar);
-	wl_display_dispatch(bar->display);
-    wl_display_roundtrip(bar->display);
+
+    wl_display_dispatch(bar->display);
+
+    bar->surface = wl_compositor_create_surface(bar->compositor);
+    bar->xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
+    bar->xdg_toplevel = xdg_surface_get_toplevel(bar->xdg_surface);
+
+    xdg_surface_add_listener(bar->xdg_surface, &xdg_surface_listener, bar);
+    xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
 
     if (bar->compositor == NULL || bar->xdg_wm_base == NULL) {
         _error("no wl_compositor or xdg_wm_base support");
@@ -213,18 +357,13 @@ bool wayland_init(struct nukebar *bar)
     };
     bar->egl_context = eglCreateContext(bar->egl_display, egl_config, EGL_NO_CONTEXT, context_attribs);
 
-    bar->surface = wl_compositor_create_surface(bar->compositor);
-    bar->xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
-    bar->xdg_toplevel = xdg_surface_get_toplevel(bar->xdg_surface);
-
-    xdg_surface_add_listener(bar->xdg_surface, &xdg_surface_listener, bar);
-    xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
-
     bar->window = wl_egl_window_create(bar->surface, bar->width, bar->height);
     bar->egl_surface = eglCreateWindowSurface(bar->egl_display, egl_config, (EGLNativeWindowType)bar->window, NULL);
 
     wl_surface_commit(bar->surface);
     wl_display_roundtrip(bar->display);
+
+    add_layer_surface(bar);
 
     free(configs);
 

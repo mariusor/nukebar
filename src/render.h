@@ -7,12 +7,12 @@ static size_t dec = 0;
 static const struct wl_callback_listener frame_listener;
 
 static bool render(struct nukebar *bar, uint32_t time) {
-    uint32_t sec = time / 1000;
-    uint32_t usec = time * 1000000L - (sec * 1000);
+    time_t sec = time / 1000;
+    uint32_t nsec = time * 1000000L - (sec * 1000);
 
     struct timespec ts = {
         .tv_sec = sec,
-        .tv_nsec = usec,
+        .tv_nsec = nsec,
     };
 
     long ms = (ts.tv_sec - bar->last_frame.tv_sec) * 1000 + (ts.tv_nsec - bar->last_frame.tv_nsec) / 1000000;
@@ -33,7 +33,7 @@ static bool render(struct nukebar *bar, uint32_t time) {
         return false;
     }
 
-    glClearColor(color[0], color[1], color[2], 1.0);
+    glClearColor(color[0], color[1], color[2], 0.4);
     glClear(GL_COLOR_BUFFER_BIT);
 
     // By default, eglSwapBuffers blocks until we receive the next frame event.
