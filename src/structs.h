@@ -1,10 +1,9 @@
 #ifndef NUKEBAR_STRUCTS_H
 #define NUKEBAR_STRUCTS_H
 
-#include <EGL/egl.h>
-#include <GLES2/gl2.h>
 #include <stdbool.h>
 #include <wayland-client.h>
+#include "xdg-shell-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
 
@@ -34,15 +33,40 @@ struct nukebar_seat {
     struct wl_list next;
 };
 
+#ifndef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#endif
+#ifndef MAX
+#define MAX(a,b) ((a) < (b) ? (b) : (a))
+#endif
+
+typedef enum wayland_pixel_layout {
+    PIXEL_LAYOUT_XRGB_8888,
+    PIXEL_LAYOUT_RGBX_8888,
+} wayland_pl;
+
+struct wayland_img {
+    void *pixels;
+    int w, h, pitch;
+    wayland_pl pl;
+    //enum nk_font_atlas_format format;
+};
+
 struct nukebar {
-    struct wl_egl_window *window;
+    struct xdg_wm_base *xdg_wm_base;
+    struct wl_backend *backend;
+    struct wl_shm *wl_shm;
+    struct wl_seat* seat;
+    struct wl_callback *frame_callback;
+    struct wl_surface *surface;
+    struct xdg_surface *xdg_surface;
+    struct xdg_toplevel *xdg_toplevel;
+    struct wl_buffer *front_buffer;
     struct wl_display *display;
     struct wl_registry *registry;
     struct wl_compositor *compositor;
     struct wl_output *output;
-    struct wl_surface *surface;
-    struct wl_seat *seat;
-    //struct wl_shm *shm;
+
     //struct wl_list outputs;
     //struct wl_list seats;
 
@@ -52,10 +76,6 @@ struct nukebar {
     struct zxdg_output_manager_v1 *xdg_output_manager;
     struct zxdg_output_v1 *xdg_output;
 
-    EGLDisplay egl_display;
-    EGLContext egl_context;
-    EGLSurface egl_surface;
-
     int32_t x;
     int32_t y;
     int32_t width;
@@ -63,6 +83,16 @@ struct nukebar {
     struct timespec last_frame;
 
     bool stop;
+
+    /*nuklear vars*/
+    struct nk_context ctx;
+    struct nk_rect scissors;
+    //struct nk_font_atlas atlas;
+    struct wayland_img font_tex;
+    uint32_t *data;
+    int mouse_pointer_x;
+    int mouse_pointer_y;
+    uint8_t tex_scratch[512 * 512];
 };
 
 #endif // NUKEBAR_STRUCTS_H

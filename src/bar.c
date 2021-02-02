@@ -1,9 +1,21 @@
+#define _GNU_SOURCE // for O_TMPFILE
+#define NK_INCLUDE_FIXED_TYPES
+#define NK_INCLUDE_STANDARD_IO
+#define NK_INCLUDE_STANDARD_VARARGS
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
+#define NK_INCLUDE_STANDARD_BOOL
+#define NK_IMPLEMENTATION
+#undef NK_INCLUDE_FONT_BAKING
+
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "nuklear.h"
 #include "structs.h"
 #include "utils.h"
+#include "render.h"
 #include "wayland.h"
 #include "version.h"
 

@@ -1,16 +1,18 @@
 #ifndef NUKEBAR_WAYLAND_H
 #define NUKEBAR_WAYLAND_H
 
+#include <fcntl.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <time.h>
+#include <unistd.h>
 #include <wayland-client.h>
 #include <wayland-client-protocol.h>
 #include <wayland-egl.h>
 #include <linux/input-event-codes.h>
 
 #include "xdg-shell-client-protocol.h"
-#include "render.h"
 
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer, uint32_t serial,  wl_fixed_t x,  wl_fixed_t y)
 {
@@ -37,7 +39,7 @@ static void xdg_toplevel_handle_configure(void *data, struct xdg_toplevel *top, 
     _trace2("xdg_toplevel_configure[%p], xdg_toplevel[%p] [%d,%d] arr[%p]", data, top, x, y, list);
     struct nukebar *bar = data;
     if (x != bar->width || y != bar->height) {
-        wl_egl_window_resize(bar->window, x, y, x - bar->width, y - bar->height);
+        //wl_egl_window_resize(bar->window, x, y, x - bar->width, y - bar->height);
 
         bar->width = x;
         bar->height = y;
@@ -185,6 +187,11 @@ static void add_xdg_output(struct nukebar *bar) {
     zxdg_output_v1_add_listener(bar->xdg_output, &xdg_output_listener, bar->output);
 }
 
+static void bar_xdg_wm_base_ping (void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial)
+{
+    xdg_wm_base_pong(xdg_wm_base, serial);
+}
+
 static void destroy_layer_surface(struct nukebar *bar) {
     if (!bar->layer_surface) {
         return;
@@ -219,8 +226,12 @@ struct zwlr_layer_surface_v1_listener layer_surface_listener = {
 
 static void add_layer_surface(struct nukebar *bar)
 {
-    bar->layer_surface = zwlr_layer_shell_v1_get_layer_surface(bar->layer_shell, bar->surface, bar->output, ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM, "panel");
     uint32_t pos = 0;
+    _trace("setting surface: %dx%d", bar->width, bar->height);
+
+    bar->layer_surface = zwlr_layer_shell_v1_get_layer_surface(bar->layer_shell, bar->surface, bar->output, ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM, "panel");
+    zwlr_layer_surface_v1_set_size(bar->layer_surface, bar->width, bar->height);
+    zwlr_layer_surface_v1_set_margin(bar->layer_surface, 0, 0, 0, 0);
     zwlr_layer_surface_v1_add_listener(bar->layer_surface, &layer_surface_listener, bar->output);
     zwlr_layer_surface_v1_set_anchor(bar->layer_surface, pos);
     zwlr_layer_surface_v1_set_exclusive_zone(bar->layer_surface, -1);
@@ -229,7 +240,7 @@ static void add_layer_surface(struct nukebar *bar)
 static void handle_global(void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version)
 {
     struct nukebar* bar  = data;
-    _trace2("%45s[%03d:%d]: data[%p], registry[%p]", interface, name, version, data, bar->registry);
+    _trace2("%45s[%03d:%d]: bar[%p]", interface, name, version, data);
     if (bar->registry != registry) {
         _warn("different registry pointers: %p vs %p", bar->registry, registry);
     }
@@ -249,10 +260,11 @@ static void handle_global(void *data, struct wl_registry *registry, uint32_t nam
         bar->layer_shell = wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
     } else if (strcmp(interface, zxdg_output_manager_v1_interface.name) == 0) {
         bar->xdg_output_manager = wl_registry_bind(registry, name, &zxdg_output_manager_v1_interface, 2);
-    }
-    /*if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
+    } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
         bar->xdg_wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
-    } */
+    }else if (!strcmp(interface, wl_shm_interface.name)) {
+        bar->wl_shm = wl_registry_bind (registry, name, &wl_shm_interface, 1);
+    }
 }
 
 static void handle_global_remove(void *data, struct wl_registry *registry, uint32_t name)
@@ -275,13 +287,27 @@ static const struct wl_registry_listener registry_listener = {
 static void frame_handle_done(void *data, struct wl_callback *callback, uint32_t time) {
     //_trace2("callback%p, time=%d", callback, time);
     time = time;
-    wl_callback_destroy(callback);
+    //wl_callback_destroy(callback);
     struct nukebar *bar = data;
 
+    _trace2("redrawing.. 1");
+    //struct nk_color col_red = {0xFF,0x00,0x00,0xA0}; //r,g,b,a
+    //struct nk_color col_green = {0x00,0xFF,0x00,0xA0}; //r,g,b,a
+    wl_callback_destroy(bar->frame_callback);
+    wl_surface_damage(bar->surface, 0, 0, bar->width, bar->height);
+
+    bar->frame_callback = wl_surface_frame(bar->surface);
+    wl_surface_attach(bar->surface, bar->front_buffer, 0, 0);
+    wl_callback_add_listener(bar->frame_callback, &frame_listener, bar);
+    wl_surface_commit(bar->surface);
     if (!render(bar, time)) {
         _error("failed to render frame, stopping.");
         bar->stop = true;
     }
+}
+
+static void redraw(void *data, struct wl_callback *callback, uint32_t time)
+{
 }
 
 static const struct wl_callback_listener frame_listener = {
@@ -296,15 +322,78 @@ static void set_output_dirty(struct nukebar *bar)
         }
     }
 }
+static void bar_wayland_surf_clear(struct nukebar* bar)
+{
+    int x, y;
+    int pix_idx;
+
+    for (y = 0; y < bar->height; y++){
+        for (x = 0; x < bar->width; x++){
+            pix_idx = y * bar->width + x;
+            bar->data[pix_idx] = 0xFF000000;
+        }
+    }
+}
+
+static void nk_wayland_scissor(struct nukebar* bar, const float x, const float y, const float w, const float h)
+{
+    bar->scissors.x = MIN(MAX(x, 0), bar->width);
+    bar->scissors.y = MIN(MAX(y, 0), bar->height);
+    bar->scissors.w = MIN(MAX(w + x, 0), bar->width);
+    bar->scissors.h = MIN(MAX(h + y, 0), bar->height);
+}
+
+static void bar_draw(struct nukebar* win)
+{
+    const void *tex = {0};
+
+#if 0
+    win->font_tex.pixels = win->tex_scratch;
+    win->font_tex.format = NK_FONT_ATLAS_ALPHA8;
+    win->font_tex.w = win->font_tex.h = 0;
+#endif
+
+    if (0 == nk_init_default(&(win->ctx), 0)) {
+        return;
+    }
+
+#if 0
+    nk_font_atlas_init_default(&(win->atlas));
+    nk_font_atlas_begin(&(win->atlas));
+    tex = nk_font_atlas_bake(&(win->atlas), &(win->font_tex.w), &(win->font_tex.h), win->font_tex.format);
+#endif
+    if (!tex) {
+        return;
+    }
+
+#if 0
+    switch(win->font_tex.format) {
+    case NK_FONT_ATLAS_ALPHA8:
+        win->font_tex.pitch = win->font_tex.w * 1;
+        break;
+    case NK_FONT_ATLAS_RGBA32:
+        win->font_tex.pitch = win->font_tex.w * 4;
+        break;
+    };
+    /* Store the font texture in tex scratch memory */
+    memcpy(win->font_tex.pixels, tex, win->font_tex.pitch * win->font_tex.h);
+    nk_font_atlas_end(&(win->atlas), nk_handle_ptr(NULL), NULL);
+    if (win->atlas.default_font)
+        nk_style_set_font(&(win->ctx), &(win->atlas.default_font->handle));
+    nk_style_load_all_cursors(&(win->ctx), win->atlas.cursors);
+#endif
+
+    nk_wayland_scissor(win, 0, 0, win->width, win->height);
+}
 
 bool wayland_init(struct nukebar *bar)
 {
-    bar->width = 128;
-    bar->height = 128;
+    bar->width = 1920;
+    bar->height = 30;
 
     bar->display = wl_display_connect(NULL);
     if (bar->display == NULL) {
-        _error("failed to create display");
+        _error("no wayland display found, is a wayland composer running? \n");
         return false;
     }
 
@@ -314,63 +403,38 @@ bool wayland_init(struct nukebar *bar)
     wl_display_dispatch(bar->display);
 
     bar->surface = wl_compositor_create_surface(bar->compositor);
-    //bar->xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
-    //bar->xdg_toplevel = xdg_surface_get_toplevel(bar->xdg_surface);
-
-    //xdg_surface_add_listener(bar->xdg_surface, &xdg_surface_listener, bar);
-    //xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
+    bar->xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
 
     if (bar->compositor == NULL || bar->layer_shell == NULL || bar->xdg_output_manager == NULL) {
         _error("Unable to connect to the compositor");
         return false;
     }
     add_layer_surface(bar);
+    //bar->xdg_toplevel = xdg_surface_get_toplevel(bar->xdg_surface);
+    xdg_surface_add_listener(bar->xdg_surface, &xdg_surface_listener, bar);
+    //xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
+    bar->frame_callback = wl_surface_frame(bar->surface);
 
     wl_surface_commit(bar->surface);
+
+	size_t size = bar->width * bar->height * 4;
+	char *xdg_runtime_dir = getenv ("XDG_RUNTIME_DIR");
+	int fd = open (xdg_runtime_dir, O_TMPFILE|O_RDWR|O_EXCL, 0600);
+	ftruncate (fd, size);
+	bar->data = mmap (NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	struct wl_shm_pool *pool = wl_shm_create_pool (bar->wl_shm, fd, size);
+	bar->front_buffer = wl_shm_pool_create_buffer (pool, 0, bar->width, bar->height, bar->width*4, WL_SHM_FORMAT_XRGB8888);
+	wl_shm_pool_destroy (pool);
+	close (fd);
+
     wl_display_roundtrip(bar->display);
+    //
+    //3. Clear window and start rendering loop
+	bar_wayland_surf_clear(bar);
+    wl_surface_attach (bar->surface, bar->front_buffer, 0, 0);
+    wl_surface_commit (bar->surface);
 
-    bar->egl_display = eglGetDisplay((EGLNativeDisplayType)bar->display);
-    if (bar->egl_display == EGL_NO_DISPLAY) {
-        _error("failed to create EGL display");
-        return false;
-    }
-
-    EGLint major, minor;
-    if (!eglInitialize(bar->egl_display, &major, &minor)) {
-        _error("failed to initialize EGL");
-        return false;
-    }
-
-    EGLint count;
-    eglGetConfigs(bar->egl_display, NULL, 0, &count);
-
-    EGLint config_attribs[] = {
-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-        EGL_RED_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE, 8,
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-        EGL_NONE,
-    };
-    EGLint n = 0;
-    EGLConfig *configs = calloc(count, sizeof(EGLConfig));
-    eglChooseConfig(bar->egl_display, config_attribs, configs, count, &n);
-    if (n == 0) {
-        _error("failed to choose an EGL config");
-        free(configs);
-        return false;
-    }
-    EGLConfig egl_config = configs[0];
-
-    EGLint context_attribs[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 2,
-        EGL_NONE,
-    };
-    bar->egl_context = eglCreateContext(bar->egl_display, egl_config, EGL_NO_CONTEXT, context_attribs);
-
-    bar->window = wl_egl_window_create(bar->surface, bar->width, bar->height);
-    bar->egl_surface = eglCreateWindowSurface(bar->egl_display, egl_config, (EGLNativeWindowType)bar->window, NULL);
-
+    bar_draw(bar);
 
     //free(configs);
 
@@ -379,25 +443,12 @@ bool wayland_init(struct nukebar *bar)
 
 void wayland_destroy(struct nukebar *bar)
 {
-    if (NULL != bar->egl_display) {
-        if (NULL != bar->egl_context) {
-            eglDestroyContext(bar->egl_display, bar->egl_context);
-        }
-        if (NULL != bar->egl_surface) {
-            eglDestroySurface(bar->egl_display, bar->egl_surface);
-        }
-        eglTerminate(bar->egl_display);
-
-        wl_egl_window_destroy(bar->window);
-    }
-    /*
     if (NULL != bar->xdg_toplevel) {
         xdg_toplevel_destroy(bar->xdg_toplevel);
     }
     if (NULL != bar->xdg_surface) {
         xdg_surface_destroy(bar->xdg_surface);
     }
-    */
     if (NULL != bar->surface) {
         wl_surface_destroy(bar->surface);
     }
