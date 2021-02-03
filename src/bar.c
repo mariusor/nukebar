@@ -5,7 +5,9 @@
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
 #define NK_INCLUDE_STANDARD_BOOL
 #define NK_IMPLEMENTATION
-#undef NK_INCLUDE_FONT_BAKING
+#define NK_INCLUDE_FONT_BAKING
+#define NK_INCLUDE_DEFAULT_FONT
+#define NK_INCLUDE_SOFTWARE_FONT
 
 #include <math.h>
 #include <stdlib.h>
@@ -15,7 +17,6 @@
 #include "nuklear.h"
 #include "structs.h"
 #include "utils.h"
-#include "render.h"
 #include "wayland.h"
 #include "version.h"
 

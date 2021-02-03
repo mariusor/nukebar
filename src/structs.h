@@ -49,7 +49,7 @@ struct wayland_img {
     void *pixels;
     int w, h, pitch;
     wayland_pl pl;
-    //enum nk_font_atlas_format format;
+    enum nk_font_atlas_format format;
 };
 
 struct nukebar {
@@ -87,7 +87,7 @@ struct nukebar {
     /*nuklear vars*/
     struct nk_context ctx;
     struct nk_rect scissors;
-    //struct nk_font_atlas atlas;
+    struct nk_font_atlas atlas;
     struct wayland_img font_tex;
     uint32_t *data;
     int mouse_pointer_x;

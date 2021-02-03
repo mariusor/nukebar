@@ -14,6 +14,8 @@
 
 #include "xdg-shell-client-protocol.h"
 
+#include "render.h"
+
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer, uint32_t serial,  wl_fixed_t x,  wl_fixed_t y)
 {
     _trace2("pointer_motion[%p], pointer[%p] serial=%d [%d,%d]", data, pointer, serial, x, y);
@@ -100,6 +102,12 @@ static void seat_handle_capabilities(void *data, struct wl_seat *seat, uint32_t 
         struct wl_pointer *pointer = wl_seat_get_pointer(seat);
         wl_pointer_add_listener(pointer, &pointer_listener, data);
     }
+#if 0
+	if (capabilities & WL_SEAT_CAPABILITY_KEYBOARD) {
+		struct wl_keyboard *keyboard = wl_seat_get_keyboard (seat);
+		wl_keyboard_add_listener (keyboard, &nk_wayland_keyboard_listener, win);
+	}
+#endif
 }
 
 static void seat_handle_name(void *data, struct wl_seat *seat, const char* name) {
@@ -335,7 +343,7 @@ static void bar_wayland_surf_clear(struct nukebar* bar)
     }
 }
 
-static void nk_wayland_scissor(struct nukebar* bar, const float x, const float y, const float w, const float h)
+static void bar_scissor(struct nukebar* bar, const float x, const float y, const float w, const float h)
 {
     bar->scissors.x = MIN(MAX(x, 0), bar->width);
     bar->scissors.y = MIN(MAX(y, 0), bar->height);
@@ -345,28 +353,24 @@ static void nk_wayland_scissor(struct nukebar* bar, const float x, const float y
 
 static void bar_draw(struct nukebar* win)
 {
+    _trace2("initializing bar");
     const void *tex = {0};
 
-#if 0
     win->font_tex.pixels = win->tex_scratch;
     win->font_tex.format = NK_FONT_ATLAS_ALPHA8;
     win->font_tex.w = win->font_tex.h = 0;
-#endif
 
     if (0 == nk_init_default(&(win->ctx), 0)) {
         return;
     }
 
-#if 0
     nk_font_atlas_init_default(&(win->atlas));
     nk_font_atlas_begin(&(win->atlas));
     tex = nk_font_atlas_bake(&(win->atlas), &(win->font_tex.w), &(win->font_tex.h), win->font_tex.format);
-#endif
     if (!tex) {
         return;
     }
 
-#if 0
     switch(win->font_tex.format) {
     case NK_FONT_ATLAS_ALPHA8:
         win->font_tex.pitch = win->font_tex.w * 1;
@@ -381,15 +385,17 @@ static void bar_draw(struct nukebar* win)
     if (win->atlas.default_font)
         nk_style_set_font(&(win->ctx), &(win->atlas.default_font->handle));
     nk_style_load_all_cursors(&(win->ctx), win->atlas.cursors);
-#endif
 
-    nk_wayland_scissor(win, 0, 0, win->width, win->height);
+    bar_scissor(win, 0, 0, win->width, win->height);
+    _trace2("initialized font");
 }
 
 bool wayland_init(struct nukebar *bar)
 {
     bar->width = 1920;
     bar->height = 30;
+
+    bar_draw(bar);
 
     bar->display = wl_display_connect(NULL);
     if (bar->display == NULL) {
@@ -417,24 +423,23 @@ bool wayland_init(struct nukebar *bar)
 
     wl_surface_commit(bar->surface);
 
-	size_t size = bar->width * bar->height * 4;
-	char *xdg_runtime_dir = getenv ("XDG_RUNTIME_DIR");
-	int fd = open (xdg_runtime_dir, O_TMPFILE|O_RDWR|O_EXCL, 0600);
-	ftruncate (fd, size);
-	bar->data = mmap (NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-	struct wl_shm_pool *pool = wl_shm_create_pool (bar->wl_shm, fd, size);
-	bar->front_buffer = wl_shm_pool_create_buffer (pool, 0, bar->width, bar->height, bar->width*4, WL_SHM_FORMAT_XRGB8888);
-	wl_shm_pool_destroy (pool);
-	close (fd);
+    size_t size = bar->width * bar->height * 4;
+    char *xdg_runtime_dir = getenv ("XDG_RUNTIME_DIR");
+    int fd = open (xdg_runtime_dir, O_TMPFILE|O_RDWR|O_EXCL, 0600);
+    ftruncate (fd, size);
+    bar->data = mmap (NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    struct wl_shm_pool *pool = wl_shm_create_pool (bar->wl_shm, fd, size);
+    bar->front_buffer = wl_shm_pool_create_buffer (pool, 0, bar->width, bar->height, bar->width*4, WL_SHM_FORMAT_XRGB8888);
+    wl_shm_pool_destroy (pool);
+    close (fd);
 
     wl_display_roundtrip(bar->display);
-    //
+
     //3. Clear window and start rendering loop
-	bar_wayland_surf_clear(bar);
+    bar_wayland_surf_clear(bar);
     wl_surface_attach (bar->surface, bar->front_buffer, 0, 0);
     wl_surface_commit (bar->surface);
 
-    bar_draw(bar);
 
     //free(configs);
 

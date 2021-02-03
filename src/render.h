@@ -1,14 +1,49 @@
 #ifndef NUKEBAR_RENDER_H
 #define NUKEBAR_RENDER_H
 
-static float color[3] = {0};
-static size_t dec = 0;
-
-static const struct wl_callback_listener frame_listener;
-
 static uint32_t nk_color_to_xrgb8888(struct nk_color col)
 {
     return (col.a << 24) + (col.r << 16) + (col.g << 8) + col.b;
+}
+static void bar_scissor(struct nukebar*, const float, const float, const float, const float);
+
+static struct nk_color bar_int2color(const unsigned int i, wayland_pl pl)
+{
+    struct nk_color col = {0,0,0,0};
+
+    switch (pl) {
+    case PIXEL_LAYOUT_RGBX_8888:
+        col.r = (i >> 24) & 0xff;
+        col.g = (i >> 16) & 0xff;
+        col.b = (i >> 8) & 0xff;
+        col.a = i & 0xff;
+        break;
+    case PIXEL_LAYOUT_XRGB_8888:
+        col.a = (i >> 24) & 0xff;
+        col.r = (i >> 16) & 0xff;
+        col.g = (i >> 8) & 0xff;
+        col.b = i & 0xff;
+        break;
+
+    default:
+        _error("nk_rawfb_int2color(): Unsupported pixel layout.");
+        break;
+    }
+    return col;
+}
+static struct nk_color bar_getpixel(const struct nukebar* win, const int x0, const int y0)
+{
+    struct nk_color col = {0, 0, 0, 0};
+    uint32_t *ptr;
+    //unsigned int pixel;
+
+    if (y0 < win->height && y0 >= 0 && x0 >= 0 && x0 < win->width) {
+        ptr = win->data + (y0 * win->width);
+
+        col = bar_int2color(*ptr, PIXEL_LAYOUT_XRGB_8888);
+    }
+
+    return col;
 }
 
 static void bar_ctx_setpixel(const struct nukebar* win,
@@ -24,9 +59,156 @@ static void bar_ctx_setpixel(const struct nukebar* win,
     if (y0 < win->scissors.h && y0 >= win->scissors.y && x0 >= win->scissors.x && x0 < win->scissors.w){
         *ptr = c;
     }else {
-        _warn("out of bound!");
+        _error("out of bound!");
     }
 }
+static void bar_blendpixel(const struct nukebar* win, const int x0, const int y0, struct nk_color col)
+{
+    struct nk_color col2;
+    unsigned char inv_a;
+    if (col.a == 0)
+        return;
+
+    inv_a = 0xff - col.a;
+    col2 = bar_getpixel(win, x0, y0);
+    col.r = (col.r * col.a + col2.r * inv_a) >> 8;
+    col.g = (col.g * col.a + col2.g * inv_a) >> 8;
+    col.b = (col.b * col.a + col2.b * inv_a) >> 8;
+    bar_ctx_setpixel(win, x0, y0, col);
+}
+
+static struct nk_color bar_img_getpixel(const struct wayland_img *img, const int x0, const int y0)
+{
+    struct nk_color col = {0, 0, 0, 0};
+    unsigned char *ptr;
+    unsigned int pixel;
+    NK_ASSERT(img);
+    if (y0 < img->h && y0 >= 0 && x0 >= 0 && x0 < img->w) {
+        ptr = img->pixels + (img->pitch * y0);
+
+        if (img->format == NK_FONT_ATLAS_ALPHA8) {
+            col.a = ptr[x0];
+            col.b = col.g = col.r = 0xff;
+        } else {
+            pixel = ((unsigned int *)ptr)[x0];
+            col = bar_int2color(pixel, img->pl);
+        }
+    } return col;
+}
+
+static void bar_copy_image(const struct nukebar *win, const struct wayland_img *src,
+    const struct nk_rect *dst_rect,
+    const struct nk_rect *src_rect,
+    const struct nk_rect *dst_scissors,
+    const struct nk_color *fg)
+{
+    short i, j;
+    struct nk_color col;
+    float xinc = src_rect->w / dst_rect->w;
+    float yinc = src_rect->h / dst_rect->h;
+    float xoff = src_rect->x, yoff = src_rect->y;
+
+    // Simple nearest filtering rescaling
+    // TODO: use bilinear filter
+    for (j = 0; j < (short)dst_rect->h; j++) {
+        for (i = 0; i < (short)dst_rect->w; i++) {
+            if (dst_scissors) {
+                if (i + (int)(dst_rect->x + 0.5f) < dst_scissors->x || i + (int)(dst_rect->x + 0.5f) >= dst_scissors->w)
+                    continue;
+                if (j + (int)(dst_rect->y + 0.5f) < dst_scissors->y || j + (int)(dst_rect->y + 0.5f) >= dst_scissors->h)
+                    continue;
+            }
+            col = bar_img_getpixel(src, (int)xoff, (int) yoff);
+	    if (col.r || col.g || col.b)
+	    {
+		col.r = fg->r;
+		col.g = fg->g;
+		col.b = fg->b;
+	    }
+            bar_blendpixel(win, i + (int)(dst_rect->x + 0.5f), j + (int)(dst_rect->y + 0.5f), col);
+            xoff += xinc;
+        }
+        xoff = src_rect->x;
+        yoff += yinc;
+    }
+}
+static void bar_font_query_font_glyph(nk_handle handle, const float height, struct nk_user_font_glyph *glyph, const nk_rune codepoint, const nk_rune next_codepoint)
+{
+    float scale;
+    const struct nk_font_glyph *g;
+    struct nk_font *font;
+    NK_ASSERT(glyph);
+    NK_UNUSED(next_codepoint);
+
+    font = (struct nk_font*)handle.ptr;
+    NK_ASSERT(font);
+    NK_ASSERT(font->glyphs);
+    if (!font || !glyph)
+        return;
+
+    scale = height/font->info.height;
+    g = nk_font_find_glyph(font, codepoint);
+    glyph->width = (g->x1 - g->x0) * scale;
+    glyph->height = (g->y1 - g->y0) * scale;
+    glyph->offset = nk_vec2(g->x0 * scale, g->y0 * scale);
+    glyph->xadvance = (g->xadvance * scale);
+    glyph->uv[0] = nk_vec2(g->u0, g->v0);
+    glyph->uv[1] = nk_vec2(g->u1, g->v1);
+}
+
+void bar_draw_text(const struct nukebar *win, const struct nk_user_font *font, const struct nk_rect rect, const char *text, const int len, const float font_height, const struct nk_color fg)
+{
+    float x = 0;
+    int text_len = 0;
+    nk_rune unicode = 0;
+    nk_rune next = 0;
+    int glyph_len = 0;
+    int next_glyph_len = 0;
+    struct nk_user_font_glyph g;
+    if (!len || !text) return;
+
+    x = 0;
+    glyph_len = nk_utf_decode(text, &unicode, len);
+    if (!glyph_len) return;
+
+    // draw every glyph image
+    while (text_len < len && glyph_len) {
+        struct nk_rect src_rect;
+        struct nk_rect dst_rect;
+        float char_width = 0;
+        if (unicode == NK_UTF_INVALID) break;
+
+        // query currently drawn glyph information
+        next_glyph_len = nk_utf_decode(text + text_len + glyph_len, &next, (int)len - text_len);
+        bar_font_query_font_glyph(font->userdata, font_height, &g, unicode,
+                    (next == NK_UTF_INVALID) ? '\0' : next);
+
+        //calculate and draw glyph drawing rectangle and image
+        char_width = g.xadvance;
+        src_rect.x = g.uv[0].x * win->font_tex.w;
+        src_rect.y = g.uv[0].y * win->font_tex.h;
+        src_rect.w = g.uv[1].x * win->font_tex.w - g.uv[0].x * win->font_tex.w;
+        src_rect.h = g.uv[1].y * win->font_tex.h - g.uv[0].y * win->font_tex.h;
+
+        dst_rect.x = x + g.offset.x + rect.x;
+        dst_rect.y = g.offset.y + rect.y;
+        dst_rect.w = ceilf(g.width);
+        dst_rect.h = ceilf(g.height);
+
+        // Use software rescaling to blit glyph from font_text to framebuffer
+        bar_copy_image(win, &(win->font_tex), &dst_rect, &src_rect, &(win->scissors), &fg);
+
+        // offset next glyph
+        text_len += glyph_len;
+        x += char_width;
+        glyph_len = next_glyph_len;
+        unicode = next;
+    }
+}
+static float color[3] = {0};
+static size_t dec = 0;
+
+static const struct wl_callback_listener frame_listener;
 
 static void bar_line_horizontal(const struct nukebar* win, const short x0, const short y, const short x1, const struct nk_color col)
 {
@@ -184,7 +366,7 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
 {
     const struct nk_command *cmd;
     //const struct nk_command_text *tx;
-    //const struct nk_command_scissor *s;
+    const struct nk_command_scissor *s;
     const struct nk_command_rect_filled *rf;
     const struct nk_command_rect *r;
     //const struct nk_command_circle_filled *c;
@@ -203,8 +385,8 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
 
         case NK_COMMAND_SCISSOR:
             _debug("NK_COMMAND_SCISSOR");
-            //s = (const struct nk_command_scissor*)cmd;
-            //bar_scissor(win, s->x, s->y, s->w, s->h);
+            s = (const struct nk_command_scissor*)cmd;
+            bar_scissor(win, s->x, s->y, s->w, s->h);
             break;
 
         case NK_COMMAND_LINE:
@@ -245,7 +427,7 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
         case NK_COMMAND_TRIANGLE_FILLED:
             _debug("triangle filled");
             //t = (const struct nk_command_triangle_filled *)cmd;
-            //nk_wayland_fill_triangle(win, t->a.x, t->a.y, t->b.x, t->b.y, t->c.x, t->c.y, t->color);
+            //bar_fill_triangle(win, t->a.x, t->a.y, t->b.x, t->b.y, t->c.x, t->c.y, t->color);
             break;
 
         case NK_COMMAND_POLYGON:
@@ -257,7 +439,7 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
         case NK_COMMAND_POLYGON_FILLED:
             _debug("NK_COMMAND_POLYGON_FILLED");
             //p = (const struct nk_command_polygon_filled *)cmd;
-            //nk_wayland_fill_polygon(win, p->points, p->point_count, p->color);
+            //bar_fill_polygon(win, p->points, p->point_count, p->color);
             break;
 
         case NK_COMMAND_POLYLINE:
@@ -269,7 +451,7 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
         case NK_COMMAND_TEXT:
             _debug("text");
             //tx = (const struct nk_command_text*)cmd;
-            //nk_wayland_draw_text(win, tx->font, nk_rect(tx->x, tx->y, tx->w, tx->h), tx->string, tx->length, tx->height, tx->foreground);
+            //bar_draw_text(win, tx->font, nk_rect(tx->x, tx->y, tx->w, tx->h), tx->string, tx->length, tx->height, tx->foreground);
             break;
 
         case NK_COMMAND_CURVE:
@@ -317,7 +499,7 @@ static bool render(struct nukebar *bar, uint32_t time) {
     };
 
     long ms = (ts.tv_sec - bar->last_frame.tv_sec) * 1000 + (ts.tv_nsec - bar->last_frame.tv_nsec) / 1000000;
-    //_trace("time %d - ms %d", time, ms);
+    _trace("time %d - ms %d", time, ms);
     size_t inc = (dec + 1) % 3;
     color[inc] += ms / 2000.0f;
     color[dec] -= ms / 2000.0f;
@@ -328,29 +510,23 @@ static bool render(struct nukebar *bar, uint32_t time) {
     }
     bar->last_frame = ts;
 
+    _debug("start new frame");
     // And draw a new frame
-
-    // By default, eglSwapBuffers blocks until we receive the next frame event.
-    // This is undesirable since it makes it impossible to process other events
-    // (such as input events) while waiting for the next frame event. Setting
-    // the swap interval to zero and managing frame events manually prevents
-    // this behavior.
-    if (nk_begin(&(bar->ctx), "NukeBAR", nk_rect(50, 50, 200, 200),
-        NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|
-        NK_WINDOW_CLOSABLE|NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE)) {
-            enum {EASY, HARD};
-            //static int op = EASY;
-            //static int property = 20;
-
+    if (nk_begin(&(bar->ctx), "NukeBAR", nk_rect(50, 50, 200, 200), NK_WINDOW_BORDER)) {
             nk_layout_row_static(&(bar->ctx), 30, 80, 1);
+            if (nk_button_label(&(bar->ctx), "button")){
+                _info("button pressed");
+            }
     }
     nk_end(&(bar->ctx));
+    _debug("nk_end");
+
     if (nk_window_is_closed(&(bar->ctx), "NukeBAR")) return false;
 
     bar_render(bar, nk_rgb(30,30,30), 1);
-    //nk_input_begin((nk_wayland_ctx.ctx));
+    nk_input_begin(&(bar->ctx));
     wl_display_dispatch(bar->display);
-    //nk_input_end(bar->ctx);
+    nk_input_end(&(bar->ctx));
 
     struct wl_callback *callback = wl_surface_frame(bar->surface);
     wl_callback_add_listener(callback, &frame_listener, bar);
