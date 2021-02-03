@@ -1,6 +1,13 @@
 #ifndef NUKEBAR_STRUCTS_H
 #define NUKEBAR_STRUCTS_H
 
+#ifndef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#endif
+#ifndef MAX
+#define MAX(a,b) ((a) < (b) ? (b) : (a))
+#endif
+
 #include <stdbool.h>
 #include <wayland-client.h>
 #include "xdg-shell-client-protocol.h"
@@ -33,13 +40,6 @@ struct nukebar_seat {
     struct wl_list next;
 };
 
-#ifndef MIN
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
-#ifndef MAX
-#define MAX(a,b) ((a) < (b) ? (b) : (a))
-#endif
-
 typedef enum wayland_pixel_layout {
     PIXEL_LAYOUT_XRGB_8888,
     PIXEL_LAYOUT_RGBX_8888,
@@ -53,6 +53,7 @@ struct wayland_img {
 };
 
 struct nukebar {
+    // @note(marius): can these not be pointers?
     struct xdg_wm_base *xdg_wm_base;
     struct wl_backend *backend;
     struct wl_shm *wl_shm;

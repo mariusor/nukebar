@@ -121,7 +121,9 @@ static const struct wl_seat_listener seat_listener = {
 
 static void output_mode(void *data, struct wl_output *wl_output, uint32_t flags, int32_t width, int32_t height, int32_t refresh)
 {
+    // @todo(marius): here we add the screens that we want to display the bar on to
     _trace2("output_mode[%p] wl_output[%p] flags=%d, size:%dx%d refresh=%d", data, wl_output, flags, width, height, refresh);
+    _trace2("");
 }
 
 static void output_done(void *data, struct wl_output *wl_output) {
