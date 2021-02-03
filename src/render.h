@@ -5,6 +5,7 @@ static uint32_t nk_color_to_xrgb8888(struct nk_color col)
 {
     return (col.a << 24) + (col.r << 16) + (col.g << 8) + col.b;
 }
+
 static void bar_scissor(struct nukebar*, const float, const float, const float, const float);
 
 static struct nk_color bar_int2color(const unsigned int i, wayland_pl pl)
@@ -374,8 +375,9 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
     const struct nk_command_line *l;
     //const struct nk_command_polygon_filled *p;
 
-    if (enable_clear)
+    if (enable_clear) {
         bar_clear(win, clear);
+    }
 
     nk_foreach(cmd, (struct nk_context*)&(win->ctx)) {
         switch (cmd->type) {
@@ -486,7 +488,8 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
             _warn("unhandled OP: %d", cmd->type);
             break;
         }
-    } nk_clear(&(win->ctx));
+    }
+    nk_clear(&(win->ctx));
 }
 
 static bool render(struct nukebar *bar, uint32_t time) {
@@ -499,7 +502,9 @@ static bool render(struct nukebar *bar, uint32_t time) {
     };
 
     long ms = (ts.tv_sec - bar->last_frame.tv_sec) * 1000 + (ts.tv_nsec - bar->last_frame.tv_nsec) / 1000000;
-    _trace("time %d - ms %d", time, ms);
+    if (ms > 0) {
+        _trace("time %d - ms %d", time, ms);
+    }
     size_t inc = (dec + 1) % 3;
     color[inc] += ms / 2000.0f;
     color[dec] -= ms / 2000.0f;
@@ -511,27 +516,34 @@ static bool render(struct nukebar *bar, uint32_t time) {
     bar->last_frame = ts;
 
     _debug("start new frame");
-    // And draw a new frame
-    if (nk_begin(&(bar->ctx), "NukeBAR", nk_rect(50, 50, 200, 200), NK_WINDOW_BORDER)) {
-            nk_layout_row_static(&(bar->ctx), 30, 80, 1);
-            if (nk_button_label(&(bar->ctx), "button")){
-                _info("button pressed");
-            }
+    if (nk_window_is_closed(&(bar->ctx), "NukeBAR")) {
+        return false;
+    }
+
+    _trace2("nk_input");
+    nk_input_begin(&(bar->ctx));
+    wl_display_dispatch(bar->display);
+    nk_input_end(&(bar->ctx));
+
+    _trace2("nk_begin");
+    if (nk_begin(&(bar->ctx), "NukeBAR", nk_rect(0, 0, bar->width, bar->height),
+            NK_WINDOW_BORDER | NK_WINDOW_NO_INPUT | NK_WINDOW_BACKGROUND)) {
+        nk_layout_row_static(&(bar->ctx), bar->height, bar->width, 1);
+        if (nk_button_label(&(bar->ctx), "button")) {
+            _info("button pressed");
+        }
     }
     nk_end(&(bar->ctx));
     _debug("nk_end");
 
-    if (nk_window_is_closed(&(bar->ctx), "NukeBAR")) return false;
-
-    bar_render(bar, nk_rgb(30,30,30), 1);
-    nk_input_begin(&(bar->ctx));
-    wl_display_dispatch(bar->display);
-    nk_input_end(&(bar->ctx));
+    bar_render(bar, nk_rgb(30,30,30), 0);
 
     struct wl_callback *callback = wl_surface_frame(bar->surface);
     wl_callback_add_listener(callback, &frame_listener, bar);
 
     wl_surface_commit(bar->surface);
+    // @todo(marius): here we need to pass the area that was rendered by nuklear
+    // for start, we assume the whole bar needs repainting
     wl_surface_damage(bar->surface, 0, 0, bar->width, bar->height);
 
     // This will attach a new buffer and commit the surface

@@ -353,9 +353,8 @@ static void bar_scissor(struct nukebar* bar, const float x, const float y, const
     bar->scissors.h = MIN(MAX(h + y, 0), bar->height);
 }
 
-static void bar_draw(struct nukebar* win)
+static bool bar_init(struct nukebar* win)
 {
-    _trace2("initializing bar");
     const void *tex = {0};
 
     win->font_tex.pixels = win->tex_scratch;
@@ -363,14 +362,17 @@ static void bar_draw(struct nukebar* win)
     win->font_tex.w = win->font_tex.h = 0;
 
     if (0 == nk_init_default(&(win->ctx), 0)) {
-        return;
+        _error("unable to initialize nuklear");
+        return false;
     }
+    _debug("initialized nuklear");
 
     nk_font_atlas_init_default(&(win->atlas));
     nk_font_atlas_begin(&(win->atlas));
     tex = nk_font_atlas_bake(&(win->atlas), &(win->font_tex.w), &(win->font_tex.h), win->font_tex.format);
     if (!tex) {
-        return;
+        _error("unable to allocate font atlas");
+        return false;
     }
 
     switch(win->font_tex.format) {
@@ -390,14 +392,14 @@ static void bar_draw(struct nukebar* win)
 
     bar_scissor(win, 0, 0, win->width, win->height);
     _trace2("initialized font");
+
+    return true;
 }
 
 bool wayland_init(struct nukebar *bar)
 {
     bar->width = 1920;
     bar->height = 30;
-
-    bar_draw(bar);
 
     bar->display = wl_display_connect(NULL);
     if (bar->display == NULL) {
@@ -442,7 +444,6 @@ bool wayland_init(struct nukebar *bar)
     wl_surface_attach (bar->surface, bar->front_buffer, 0, 0);
     wl_surface_commit (bar->surface);
 
-
     //free(configs);
 
     return true;
@@ -450,6 +451,7 @@ bool wayland_init(struct nukebar *bar)
 
 void wayland_destroy(struct nukebar *bar)
 {
+    nk_free(&(bar->ctx));
     if (NULL != bar->xdg_toplevel) {
         xdg_toplevel_destroy(bar->xdg_toplevel);
     }

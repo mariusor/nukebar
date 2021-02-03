@@ -69,6 +69,9 @@ int main(int argc, char** argv)
     struct nukebar bar = {0};
     _trace2("Started bar %p:%u", &bar, sizeof(bar));
 
+    if (!bar_init(&bar)) {
+        goto _failure;
+    }
     if (!wayland_init(&bar)) {
         goto _failure;
     }
