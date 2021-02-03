@@ -6,25 +6,27 @@ project('nukebar', 'c',
         ],
         license : 'MIT')
 
-c_args = ['-Wall', '-Wno-unused-function', '-Wno-unused-parameter', '-fno-omit-frame-pointer']
-
-bin_name = meson.project_name()
+c_args = ['-Wall', '-Wno-pointer-arith', '-Wno-unused-function', '-Wno-unused-parameter', '-fno-omit-frame-pointer']
 
 if get_option('buildtype') == 'debug'
-    add_project_arguments('-Wextra', language : 'c')
-    add_project_arguments('-Wpedantic', language : 'c')
+    #add_project_arguments('-Wextra', language : 'c')
+    #add_project_arguments('-Wpedantic', language : 'c')
     add_project_arguments('-Werror', language : 'c')
     add_project_arguments('-DDEBUG', language : 'c')
 endif
-add_project_arguments('-lrt', language: 'c')
+
+cc = meson.get_compiler('c')
+
+m_dep = cc.find_library('m', required: true)
+#rt_dep = cc.find_library('rt', required: true)
 
 wayland_client = dependency('wayland-client', required: true)
 wayland_protos = dependency('wayland-protocols', version: '>=1.14', required: true)
-cc = meson.get_compiler('c')
 
 subdir('protocol')
 
 deps = [
+    m_dep,
     wayland_client,
     wayland_protos,
     client_protos
