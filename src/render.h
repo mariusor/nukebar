@@ -18,7 +18,8 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
     const struct nk_command_triangle *t;
     const struct nk_command_triangle_filled *tf;
     const struct nk_command_line *l;
-    //const struct nk_command_polygon_filled *p;
+    const struct nk_command_polygon *p;
+    const struct nk_command_polygon_filled *pf;
 
     if (enable_clear) {
         bar_clear(win, clear);
@@ -77,14 +78,14 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
             break;
 
         case NK_COMMAND_POLYGON:
-            _trace2("NK_COMMAND_POLYGON");
-            //const struct nk_command_polygon *p =(const struct nk_command_polygon*)cmd;
+            p = (const struct nk_command_polygon*)cmd;
+            _trace2("NK_COMMAND_POLYGON points[%d], point_count[%d], line[%f, %f]", p->points, p->point_count, p->line_thickness,p->color);
             //bar_stroke_polygon(win, p->points, p->point_count, p->line_thickness,p->color);
             break;
 
         case NK_COMMAND_POLYGON_FILLED:
-            _trace2("NK_COMMAND_POLYGON_FILLED");
-            //p = (const struct nk_command_polygon_filled *)cmd;
+            pf = (const struct nk_command_polygon_filled *)cmd;
+            _trace2("NK_COMMAND_POLYGON_FILLED points[%d], point_count[%d], color[%f]", pf->points, pf->point_count, pf->color);
             //bar_fill_polygon(win, p->points, p->point_count, p->color);
             break;
 
@@ -95,7 +96,7 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
             break;
 
         case NK_COMMAND_TEXT:
-            _trace2("text");
+            _trace2("NK_COMMAND_TEXT");
             //tx = (const struct nk_command_text*)cmd;
             //bar_draw_text(win, tx->font, nk_rect(tx->x, tx->y, tx->w, tx->h), tx->string, tx->length, tx->height, tx->foreground);
             break;
@@ -163,10 +164,6 @@ static bool render(struct nukebar *bar, uint32_t time) {
     assert(bar->display);
     _debug("start new frame");
 
-    _trace2("nk_input");
-    nk_input_begin(&(bar->ctx));
-    wl_display_dispatch(bar->display);
-    nk_input_end(&(bar->ctx));
 
     _trace2("nk_begin");
     if (nk_begin(&(bar->ctx), "NukeBAR", nk_rect(0, 0, bar->width, bar->height),
@@ -185,6 +182,11 @@ static bool render(struct nukebar *bar, uint32_t time) {
 
     bar_render(bar, nk_rgb(30,30,30), 0);
 
+    _trace2("nk_input");
+    nk_input_begin(&(bar->ctx));
+    wl_display_dispatch(bar->display);
+    nk_input_end(&(bar->ctx));
+
     struct wl_callback *callback = wl_surface_frame(bar->surface);
     wl_callback_add_listener(callback, &frame_listener, bar);
 
@@ -194,10 +196,6 @@ static bool render(struct nukebar *bar, uint32_t time) {
     wl_surface_damage(bar->surface, 0, 0, bar->width, bar->height);
 
     // This will attach a new buffer and commit the surface
-    if (false) {
-        return false;
-    }
-
     return true;
 }
 

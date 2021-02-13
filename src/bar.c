@@ -76,10 +76,6 @@ int main(int argc, char** argv)
     if (!wayland_init(&bar)) {
         goto _failure;
     }
-    // Draw the first frame
-    if (!render(&bar, 0)) {
-        goto _failure;
-    }
 
     while (wl_display_dispatch(bar.display) != -1 && !bar.stop) {
         // This space intentionally left blank

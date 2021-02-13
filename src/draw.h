@@ -29,21 +29,10 @@ static void bar_scissor(struct nukebar* bar, const float x, const float y, const
     bar->scissors.h = MIN(MAX(h + y, 0), bar->height);
 }
 
-static bool render(struct nukebar*, uint32_t);
-static void set_output_dirty(struct nukebar *bar)
-{
-    if (bar->surface) {
-        if (!render(bar, 0)) {
-            bar->stop = true;
-        }
-    }
-}
-
-static uint32_t nk_color_to_xrgb8888(struct nk_color col)
+static inline uint32_t nk_color_to_xrgb8888(struct nk_color col)
 {
     return (col.a << 24) + (col.r << 16) + (col.g << 8) + col.b;
 }
-
 
 static struct nk_color bar_int2color(const unsigned int i, wayland_pl pl)
 {
