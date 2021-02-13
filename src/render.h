@@ -515,10 +515,8 @@ static bool render(struct nukebar *bar, uint32_t time) {
     }
     bar->last_frame = ts;
 
+    assert(bar->display);
     _debug("start new frame");
-    if (nk_window_is_closed(&(bar->ctx), "NukeBAR")) {
-        return false;
-    }
 
     _trace2("nk_input");
     nk_input_begin(&(bar->ctx));
@@ -535,6 +533,10 @@ static bool render(struct nukebar *bar, uint32_t time) {
     }
     nk_end(&(bar->ctx));
     _debug("nk_end");
+
+    if (nk_window_is_closed(&(bar->ctx), "NukeBAR")) {
+        return false;
+    }
 
     bar_render(bar, nk_rgb(30,30,30), 0);
 

@@ -242,7 +242,7 @@ static void add_layer_surface(struct nukebar *bar)
     bar->layer_surface = zwlr_layer_shell_v1_get_layer_surface(bar->layer_shell, bar->surface, bar->output, ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM, "panel");
     zwlr_layer_surface_v1_set_size(bar->layer_surface, bar->width, bar->height);
     zwlr_layer_surface_v1_set_margin(bar->layer_surface, 0, 0, 0, 0);
-    zwlr_layer_surface_v1_add_listener(bar->layer_surface, &layer_surface_listener, bar->output);
+    zwlr_layer_surface_v1_add_listener(bar->layer_surface, &layer_surface_listener, bar);
     zwlr_layer_surface_v1_set_anchor(bar->layer_surface, pos);
     zwlr_layer_surface_v1_set_exclusive_zone(bar->layer_surface, -1);
 }
