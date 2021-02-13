@@ -17,6 +17,7 @@
 #include "nuklear.h"
 #include "structs.h"
 #include "utils.h"
+#include "draw.h"
 #include "wayland.h"
 #include "version.h"
 

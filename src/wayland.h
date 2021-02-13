@@ -123,7 +123,6 @@ static void output_mode(void *data, struct wl_output *wl_output, uint32_t flags,
 {
     // @todo(marius): here we add the screens that we want to display the bar on to
     _trace2("output_mode[%p] wl_output[%p] flags=%d, size:%dx%d refresh=%d", data, wl_output, flags, width, height, refresh);
-    _trace2("");
 }
 
 static void output_done(void *data, struct wl_output *wl_output) {
@@ -146,20 +145,24 @@ struct wl_output_listener output_listener = {
     .done = output_done,
     .scale = output_scale,
 };
+
 static void xdg_output_handle_logical_position(void *data, struct zxdg_output_v1 *xdg_output, int32_t x, int32_t y)
 {
     _trace2("xdg_output_local_position[%p] xdg_output[%p] pos: %dx%d", data, xdg_output, x, y);
     struct nukebar *bar = data;
     bar->x = x;
     bar->y = y;
+    _debug("bar pos: %dx%d", x, y);
 }
 
 static void xdg_output_handle_logical_size(void *data, struct zxdg_output_v1 *xdg_output, int32_t width, int32_t height)
 {
     _trace2("xdg_output_local_size[%p] xdg_output[%p] size: %dx%d", data, xdg_output, width, height);
     struct nukebar *bar = data;
-    bar->height = height;
+    // note(marius): we compute the width and height of the bar based on data from configuration
+    bar->height = 32; //
     bar->width = width;
+    _debug("bar size: %dx%d", bar->width, bar->height);
 }
 
 static void xdg_output_handle_done(void *data, struct zxdg_output_v1 *xdg_output)
@@ -220,6 +223,7 @@ static void layer_surface_closed(void *data, struct zwlr_layer_surface_v1 *surfa
 }
 
 static void set_output_dirty(struct nukebar*);
+
 static void layer_surface_configure(void *data, struct zwlr_layer_surface_v1 *surface, uint32_t serial, uint32_t width, uint32_t height)
 {
     struct nukebar *bar = data;
@@ -316,42 +320,9 @@ static void frame_handle_done(void *data, struct wl_callback *callback, uint32_t
     }
 }
 
-static void redraw(void *data, struct wl_callback *callback, uint32_t time)
-{
-}
-
 static const struct wl_callback_listener frame_listener = {
     .done = frame_handle_done,
 };
-
-static void set_output_dirty(struct nukebar *bar)
-{
-    if (bar->surface) {
-        if (!render(bar, 0)) {
-            bar->stop = true;
-        }
-    }
-}
-static void bar_wayland_surf_clear(struct nukebar* bar)
-{
-    int x, y;
-    int pix_idx;
-
-    for (y = 0; y < bar->height; y++){
-        for (x = 0; x < bar->width; x++){
-            pix_idx = y * bar->width + x;
-            bar->data[pix_idx] = 0xFF000000;
-        }
-    }
-}
-
-static void bar_scissor(struct nukebar* bar, const float x, const float y, const float w, const float h)
-{
-    bar->scissors.x = MIN(MAX(x, 0), bar->width);
-    bar->scissors.y = MIN(MAX(y, 0), bar->height);
-    bar->scissors.w = MIN(MAX(w + x, 0), bar->width);
-    bar->scissors.h = MIN(MAX(h + y, 0), bar->height);
-}
 
 static bool bar_init(struct nukebar* win)
 {
@@ -442,6 +413,7 @@ bool wayland_init(struct nukebar *bar)
     //3. Clear window and start rendering loop
     bar_wayland_surf_clear(bar);
     wl_surface_attach (bar->surface, bar->front_buffer, 0, 0);
+    wl_surface_damage_buffer(bar->surface, 0, 0, INT32_MAX, INT32_MAX);
     wl_surface_commit (bar->surface);
 
     //free(configs);
