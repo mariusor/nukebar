@@ -16,6 +16,9 @@
 
 #include "render.h"
 
+#define DEFAULT_WIDTH_PX 1920
+#define DEFAULT_HEIGHT_PX 30
+
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer, uint32_t serial,  wl_fixed_t x,  wl_fixed_t y)
 {
 	_trace2("pointer_motion[%p], pointer[%p] serial=%d [%d,%d]", data, pointer, serial, x, y);
@@ -39,18 +42,16 @@ static void pointer_handle_axis(void *data, struct wl_pointer *pointer, uint32_t
 static void xdg_toplevel_handle_configure(void *data, struct xdg_toplevel *top, int32_t x, int32_t y, struct wl_array *list)
 {
 	_trace2("xdg_toplevel_configure[%p], xdg_toplevel[%p] [%d,%d] arr[%p]", data, top, x, y, list);
-	struct nukebar *bar = data;
-	if (x != bar->width || y != bar->height) {
-		//wl_egl_window_resize(bar->window, x, y, x - bar->width, y - bar->height);
-
-		bar->width = x;
-		bar->height = y;
-	}
+	//struct nukebar *bar = data;
+	//if (x != bar->width || y != bar->height) {
+	//	bar->width = x;
+	//	bar->height = y;
+	//}
 }
 
 static void xdg_surface_handle_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial)
 {
-	_trace2("xdg_surface[%p], serial=%d data[%p]", xdg_surface, serial, data);
+	_trace2("xdg_surface_configure[%p], xdg_surface[%p] serial=%d", data, xdg_surface, serial);
 
 	if (data == NULL) { return; }
 	struct nukebar* bar = data;
@@ -131,6 +132,11 @@ static void output_done(void *data, struct wl_output *wl_output) {
 
 static void output_scale(void *data, struct wl_output *wl_output, int32_t factor) {
 	_trace2("output_scale[%p] wl_output[%p] factor=%d", data, wl_output, factor);
+    //struct nukebar *bar = data;
+    //output->scale = scale;
+    //if (output->state->run_display && output->width > 0 && output->height > 0) {
+    //    render_frame(output);
+    //}
 }
 
 
@@ -160,8 +166,8 @@ static void xdg_output_handle_logical_size(void *data, struct zxdg_output_v1 *xd
 	_trace2("xdg_output_local_size[%p] xdg_output[%p] size: %dx%d", data, xdg_output, width, height);
 	struct nukebar *bar = data;
 	// note(marius): we compute the width and height of the bar based on data from configuration
-	bar->height = 32; //
-	bar->width = width;
+	//bar->height = width; //
+	//bar->width = width;
 	_debug("bar size: %dx%d", bar->width, bar->height);
 }
 
@@ -186,7 +192,8 @@ static void set_output_dirty(struct nukebar*);
 
 static void layer_surface_configure(void *data, struct zwlr_layer_surface_v1 *surface, uint32_t serial, uint32_t width, uint32_t height)
 {
-    struct nukebar *bar = data;
+	struct nukebar *bar = data;
+	_trace2("layer_surface_configure[%p] layer_surface[%p] serial=%d w=%d h=%d", bar, surface, serial, width, height);
     bar->width = width;
     bar->height = height;
     zwlr_layer_surface_v1_ack_configure(surface, serial);
@@ -250,12 +257,12 @@ struct zxdg_output_v1_listener xdg_output_listener = {
 
 static void add_xdg_output(struct nukebar *bar) {
 	if (bar->xdg_output != NULL) {
-		_trace2("skipping output");
+	//	_trace2("skipping output");
 		return;
 	}
 	_trace("adding output");
 	bar->xdg_output = zxdg_output_manager_v1_get_xdg_output(bar->xdg_output_manager, bar->output);
-	zxdg_output_v1_add_listener(bar->xdg_output, &xdg_output_listener, bar->output);
+	zxdg_output_v1_add_listener(bar->xdg_output, &xdg_output_listener, bar);
 }
 
 static void bar_xdg_wm_base_ping (void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial)
@@ -277,6 +284,8 @@ static void handle_global(void *data, struct wl_registry *registry, uint32_t nam
 		bar->seat = wl_registry_bind(registry, name, &wl_seat_interface, 3);
 		wl_seat_add_listener(bar->seat, &seat_listener, bar);
 	} else if (strcmp(interface, wl_output_interface.name) == 0) {
+        // TODO(marius): this needs an array of outputs, because we should be able to draw the bar on
+        //  different ones.
 		bar->output = wl_registry_bind(registry, name, &wl_output_interface, 1);
 		wl_output_add_listener(bar->output, &output_listener, bar);
 		if (bar->xdg_output_manager != NULL) {
@@ -286,8 +295,8 @@ static void handle_global(void *data, struct wl_registry *registry, uint32_t nam
 		bar->layer_shell = wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
 	} else if (strcmp(interface, zxdg_output_manager_v1_interface.name) == 0) {
 		bar->xdg_output_manager = wl_registry_bind(registry, name, &zxdg_output_manager_v1_interface, 2);
-	} else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
-		bar->xdg_wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
+	//} else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
+	//	bar->xdg_wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
 	}else if (!strcmp(interface, wl_shm_interface.name)) {
 		bar->wl_shm = wl_registry_bind (registry, name, &wl_shm_interface, 1);
 	}
@@ -302,7 +311,27 @@ static void handle_global_remove(void *data, struct wl_registry *registry, uint3
 		_warn("registry pointers are different, %p vs %p", bar->registry, registry);
 	}
 	name = (uint32_t)name;
-	// Who cares
+#if 0
+	wl_list_for_each_safe(output, tmp, &bar->outputs, link) {
+		if (output->wl_name == name) {
+			swaybar_output_free(output);
+			return;
+		}
+	}
+	wl_list_for_each_safe(output, tmp, &bar->unused_outputs, link) {
+		if (output->wl_name == name) {
+			swaybar_output_free(output);
+			return;
+		}
+	}
+	struct swaybar_seat *seat, *tmp_seat;
+	wl_list_for_each_safe(seat, tmp_seat, &bar->seats, link) {
+		if (seat->wl_name == name) {
+			swaybar_seat_free(seat);
+			return;
+		}
+	}
+#endif
 }
 
 static const struct wl_registry_listener registry_listener = {
@@ -381,8 +410,8 @@ static bool bar_init(struct nukebar* win)
 
 bool wayland_init(struct nukebar *bar)
 {
-	bar->width = 1920;
-	bar->height = 30;
+	bar->width = DEFAULT_WIDTH_PX;
+	bar->height = DEFAULT_HEIGHT_PX;
 
 	bar->display = wl_display_connect(NULL);
 	if (bar->display == NULL) {
@@ -392,11 +421,12 @@ bool wayland_init(struct nukebar *bar)
 
 	bar->registry = wl_display_get_registry(bar->display);
 	wl_registry_add_listener(bar->registry, &registry_listener, bar);
+	wl_display_roundtrip(bar->display);
 
 	wl_display_dispatch(bar->display);
 
 	bar->surface = wl_compositor_create_surface(bar->compositor);
-	bar->xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
+	//bar->xdg_surface = xdg_wm_base_get_xdg_surface(bar->xdg_wm_base, bar->surface);
 
 	if (bar->compositor == NULL || bar->layer_shell == NULL || bar->xdg_output_manager == NULL) {
 		_error("Unable to connect to the compositor");
@@ -404,7 +434,7 @@ bool wayland_init(struct nukebar *bar)
 	}
 
 	//bar->xdg_toplevel = xdg_surface_get_toplevel(bar->xdg_surface);
-	xdg_surface_add_listener(bar->xdg_surface, &xdg_surface_listener, bar);
+	//xdg_surface_add_listener(bar->xdg_surface, &xdg_surface_listener, bar);
 	//xdg_toplevel_add_listener(bar->xdg_toplevel, &xdg_toplevel_listener, bar);
 	bar->frame_callback = wl_surface_frame(bar->surface);
 
@@ -424,6 +454,7 @@ bool wayland_init(struct nukebar *bar)
 
 	//3. Clear window and start rendering loop
 	bar_wayland_surf_clear(bar);
+	wl_surface_set_buffer_scale(bar->surface, 1);
 	wl_surface_attach (bar->surface, bar->front_buffer, 0, 0);
 	wl_surface_damage_buffer(bar->surface, 0, 0, INT32_MAX, INT32_MAX);
 	wl_surface_commit (bar->surface);

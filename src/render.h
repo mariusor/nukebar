@@ -210,5 +210,4 @@ static bool render(struct nukebar *bar, uint32_t time) {
     return true;
 }
 
-
 #endif // NUKEBAR_RENDER_H

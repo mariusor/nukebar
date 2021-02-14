@@ -85,8 +85,8 @@ static void bar_ctx_setpixel(const struct nukebar* win, const short x0, const sh
 
     if (y0 < win->scissors.h && y0 >= win->scissors.y && x0 >= win->scissors.x && x0 < win->scissors.w){
         *ptr = c;
-    }else {
-        _error("out of bound!");
+    } else {
+        //_error("out of bound!");
     }
 }
 
