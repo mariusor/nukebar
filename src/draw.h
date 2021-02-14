@@ -385,6 +385,19 @@ static void bar_fill_polygon(const struct nukebar* win, const struct nk_vec2i *p
     }
 }
 
+static void bar_fill_triangle(const struct nukebar *win,
+                                     const short x0, const short y0, const short x1, const short y1,
+                                     const short x2, const short y2, const struct nk_color col)
+{
+    struct nk_vec2i pnts[3];
+    pnts[0].x = x0;
+    pnts[0].y = y0;
+    pnts[1].x = x1;
+    pnts[1].y = y1;
+    pnts[2].x = x2;
+    pnts[2].y = y2;
+    bar_fill_polygon(win, pnts, 3, col);
+}
 static void bar_fill_arc(const struct nukebar* win, short x0, short y0, short w, short h, const short s, const struct nk_color col)
 {
     /* Bresenham's ellipses - modified to fill one quarter */
@@ -498,4 +511,85 @@ static void bar_fill_rect(const struct nukebar* win, const short x, const short 
     }
 }
 
+static void bar_stroke_arc(const struct nukebar* win,
+                                  short x0, short y0, short w, short h, const short s,
+                                  const short line_thickness, const struct nk_color col)
+{
+    /* Bresenham's ellipses - modified to draw one quarter */
+    const int a2 = (w * w) / 4;
+    const int b2 = (h * h) / 4;
+    const int fa2 = 4 * a2, fb2 = 4 * b2;
+    int x, y, sigma;
+
+    if (s != 0 && s != 90 && s != 180 && s != 270) return;
+    if (w < 1 || h < 1) return;
+
+    /* Convert upper left to center */
+    h = (h + 1) / 2;
+    w = (w + 1) / 2;
+    x0 += w; y0 += h;
+
+    /* First half */
+    for (x = 0, y = h, sigma = 2*b2+a2*(1-2*h); b2*x <= a2*y; x++) {
+        if (s == 180)
+            bar_ctx_setpixel(win, x0 + x, y0 + y, col);
+        else if (s == 270)
+            bar_ctx_setpixel(win, x0 - x, y0 + y, col);
+        else if (s == 0)
+            bar_ctx_setpixel(win, x0 + x, y0 - y, col);
+        else if (s == 90)
+            bar_ctx_setpixel(win, x0 - x, y0 - y, col);
+        if (sigma >= 0) {
+            sigma += fa2 * (1 - y);
+            y--;
+        } sigma += b2 * ((4 * x) + 6);
+    }
+
+    /* Second half */
+    for (x = w, y = 0, sigma = 2*a2+b2*(1-2*w); a2*y <= b2*x; y++) {
+        if (s == 180)
+            bar_ctx_setpixel(win, x0 + x, y0 + y, col);
+        else if (s == 270)
+            bar_ctx_setpixel(win, x0 - x, y0 + y, col);
+        else if (s == 0)
+            bar_ctx_setpixel(win, x0 + x, y0 - y, col);
+        else if (s == 90)
+            bar_ctx_setpixel(win, x0 - x, y0 - y, col);
+        if (sigma >= 0) {
+            sigma += fb2 * (1 - x);
+            x--;
+        } sigma += a2 * ((4 * y) + 6);
+    }
+}
+
+static void bar_stroke_rect(const struct nukebar* win,
+                                   const short x, const short y, const short w, const short h,
+                                   const short r, const short line_thickness, const struct nk_color col)
+{
+    if (r == 0) {
+        bar_stroke_line(win, x, y, x + w, y, line_thickness, col);
+        bar_stroke_line(win, x, y + h, x + w, y + h, line_thickness, col);
+        bar_stroke_line(win, x, y, x, y + h, line_thickness, col);
+        bar_stroke_line(win, x + w, y, x + w, y + h, line_thickness, col);
+    } else {
+        const short xc = x + r;
+        const short yc = y + r;
+        const short wc = (short)(w - 2 * r);
+        const short hc = (short)(h - 2 * r);
+
+        bar_stroke_line(win, xc, y, xc + wc, y, line_thickness, col);
+        bar_stroke_line(win, x + w, yc, x + w, yc + hc, line_thickness, col);
+        bar_stroke_line(win, xc, y + h, xc + wc, y + h, line_thickness, col);
+        bar_stroke_line(win, x, yc, x, yc + hc, line_thickness, col);
+
+        bar_stroke_arc(win, xc + wc - r, y,
+                              (unsigned)r*2, (unsigned)r*2, 0 , line_thickness, col);
+        bar_stroke_arc(win, x, y,
+                              (unsigned)r*2, (unsigned)r*2, 90 , line_thickness, col);
+        bar_stroke_arc(win, x, yc + hc - r,
+                              (unsigned)r*2, (unsigned)r*2, 270 , line_thickness, col);
+        bar_stroke_arc(win, xc + wc - r, yc + hc - r,
+                              (unsigned)r*2, (unsigned)r*2, 180 , line_thickness, col);
+    }
+}
 #endif // NUKEBAR_DRAW_H

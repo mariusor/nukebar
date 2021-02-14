@@ -9,7 +9,7 @@ static void bar_clear(const struct nukebar *win, const struct nk_color col)
 static void bar_render(struct nukebar *win, const struct nk_color clear, const unsigned char enable_clear)
 {
     const struct nk_command *cmd;
-    //const struct nk_command_text *tx;
+    const struct nk_command_text *tx;
     const struct nk_command_scissor *s;
     const struct nk_command_rect_filled *rf;
     const struct nk_command_rect *r;
@@ -20,6 +20,7 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
     const struct nk_command_line *l;
     const struct nk_command_polygon *p;
     const struct nk_command_polygon_filled *pf;
+    const struct nk_command_polyline *pl;
 
     if (enable_clear) {
         bar_clear(win, clear);
@@ -33,83 +34,93 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
 
         case NK_COMMAND_SCISSOR:
             s = (const struct nk_command_scissor*)cmd;
-            bar_scissor(win, s->x, s->y, s->w, s->h);
             _trace2("NK_COMMAND_SCISSOR [%d, %d, %d, %d]", s->x, s->y, s->w, s->h);
+            bar_scissor(win, s->x, s->y, s->w, s->h);
             break;
 
         case NK_COMMAND_LINE:
             l = (const struct nk_command_line *)cmd;
             _trace2("NK_COMMAND_LINE st[%d, %d] end[%d, %d] line[%f, %f]", l->begin.x, l->begin.y, l->end.x, l->end.y, l->line_thickness, l->color);
+            bar_stroke_line(win, l->begin.x, l->begin.y, l->end.x, l->end.y, l->line_thickness, l->color);
             break;
 
         case NK_COMMAND_RECT:
             r = (const struct nk_command_rect *)cmd;
             _trace2("NK_COMMAND_RECT center[%d, %d], w:%d, h:%d %u line[%f, %f]", r->x, r->y, r->w, r->h, (unsigned short)r->rounding, r->line_thickness, r->color);
+            bar_stroke_rect(win, r->x, r->y, r->w, r->h, (unsigned short)r->rounding, r->line_thickness, r->color);
             break;
 
         case NK_COMMAND_RECT_FILLED:
             rf = (const struct nk_command_rect_filled *)cmd;
             _trace2("NK_COMMAND_RECT_FILLED center[%d, %d], w:%d, h:%d %u color %f", rf->x, rf->y, rf->w, rf->h, (unsigned short)rf->rounding, rf->color);
+            bar_fill_rect(win, rf->x, rf->y, rf->w, rf->h, (unsigned short)rf->rounding, rf->color);
             break;
 
         case NK_COMMAND_CIRCLE:
             c = (const struct nk_command_circle *)cmd;
             _trace2("NK_COMMAND_CIRCLE center[%d,%d], radius[%d, %d], line[%d, %f]", c->x, c->y, c->w, c->h, c->line_thickness, c->color);
+            // todo(marius): pick it up from rawfb example
             //bar_stroke_circle(win, c->x, c->y, c->w, c->h, c->line_thickness, c->color);
             break;
 
         case NK_COMMAND_CIRCLE_FILLED:
             cf = (const struct nk_command_circle_filled *)cmd;
             _trace2("NK_COMMAND_CIRCLE_FILLED center[%d,%d], radius[%d, %d], fill[%f]", cf->x, cf->y, cf->w, cf->h, cf->color);
+            // todo(marius): pick it up from rawfb example
             //bar_fill_circle(win, cf->x, cf->y, cf->w, cf->h, cf->color);
             break;
 
         case NK_COMMAND_TRIANGLE:
             t = (const struct nk_command_triangle*)cmd;
-            //bar_stroke_triangle(win, t->a.x, t->a.y, t->b.x, t->b.y, t->c.x, t->c.y, t->line_thickness, t->color);
             _trace2("NK_COMMAND_TRIANGLE A[%d,%d], B[%d, %d], C[%d,%d] line[%d, %f]", t->a.x, t->a.y, t->b.x, t->b.y, t->c.x, t->c.y, t->line_thickness, t->color);
+            // todo(marius): pick it up from rawfb example
+            //bar_stroke_triangle(win, t->a.x, t->a.y, t->b.x, t->b.y, t->c.x, t->c.y, t->line_thickness, t->color);
             break;
 
         case NK_COMMAND_TRIANGLE_FILLED:
-            _trace2("NK_COMMAND_TRIANGLE_FILLED");
             tf = (const struct nk_command_triangle_filled *)cmd;
-            _trace2("triangle filled A[%d,%d], B[%d, %d], C[%d,%d] fill[%f]", tf->a.x, tf->a.y, tf->b.x, tf->b.y, tf->c.x, tf->c.y, tf->color);
-            //bar_fill_triangle(win, tf->a.x, tf->a.y, tf->b.x, tf->b.y, tf->c.x, tf->c.y, tf->color);
+            _trace2("NK_COMMAND_TRIANGLE_FILLED A[%d,%d], B[%d, %d], C[%d,%d] fill[%f]", tf->a.x, tf->a.y, tf->b.x, tf->b.y, tf->c.x, tf->c.y, tf->color);
+            bar_fill_triangle(win, tf->a.x, tf->a.y, tf->b.x, tf->b.y, tf->c.x, tf->c.y, tf->color);
             break;
 
         case NK_COMMAND_POLYGON:
             p = (const struct nk_command_polygon*)cmd;
             _trace2("NK_COMMAND_POLYGON points[%d], point_count[%d], line[%f, %f]", p->points, p->point_count, p->line_thickness,p->color);
+            // todo(marius): pick it up from rawfb example
             //bar_stroke_polygon(win, p->points, p->point_count, p->line_thickness,p->color);
             break;
 
         case NK_COMMAND_POLYGON_FILLED:
             pf = (const struct nk_command_polygon_filled *)cmd;
             _trace2("NK_COMMAND_POLYGON_FILLED points[%d], point_count[%d], color[%f]", pf->points, pf->point_count, pf->color);
+            // todo(marius): pick it up from rawfb example
             //bar_fill_polygon(win, p->points, p->point_count, p->color);
             break;
 
         case NK_COMMAND_POLYLINE:
-            _trace2("NK_COMMAND_POLYLINE");
-            //const struct nk_command_polyline *p = (const struct nk_command_polyline *)cmd;
-            //bar_stroke_polyline(win, p->points, p->point_count, p->line_thickness, p->color);
+            pl = (const struct nk_command_polyline *)cmd;
+            _trace2("NK_COMMAND_POLYLINE %", pl->points, pl->point_count, pl->line_thickness, pl->color);
+            // todo(marius): pick it up from rawfb example
+            //bar_stroke_polyline(win, pl->points, pl->point_count, pl->line_thickness, pl->color);
             break;
 
         case NK_COMMAND_TEXT:
-            _trace2("NK_COMMAND_TEXT");
-            //tx = (const struct nk_command_text*)cmd;
-            //bar_draw_text(win, tx->font, nk_rect(tx->x, tx->y, tx->w, tx->h), tx->string, tx->length, tx->height, tx->foreground);
+            tx = (const struct nk_command_text*)cmd;
+            _trace2("NK_COMMAND_TEXT rect(%d, %d, %d, %d) %s - l %d, %d color(%f)", tx->x, tx->y, tx->w, tx->h, tx->string, tx->length, tx->height, tx->foreground);
+            bar_draw_text(win, tx->font, nk_rect(tx->x, tx->y, tx->w, tx->h), tx->string, tx->length, tx->height, tx->foreground);
             break;
 
         case NK_COMMAND_CURVE:
              _trace2("NK_COMMAND_CURVE");
             //const struct nk_command_curve *q = (const struct nk_command_curve *)cmd;
+            // todo(marius): pick it up from rawfb example
             //bar_stroke_curve(win, q->begin, q->ctrl[0], q->ctrl[1], q->end, 22, q->line_thickness, q->color);
             break;
 
         case NK_COMMAND_RECT_MULTI_COLOR:
             _trace2("NK_COMMAND_RECT_MULTI_COLOR");
             //const struct nk_command_rect_multi_color *q = (const struct nk_command_rect_multi_color *)cmd;
+            // todo(marius): pick it up from rawfb example
             //bar_draw_rect_multi_color(win, q->x, q->y, q->w, q->h, q->left, q->top, q->right, q->bottom);
             break;
 
