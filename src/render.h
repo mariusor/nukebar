@@ -40,66 +40,66 @@ static void bar_render(struct nukebar *win, const struct nk_color clear, const u
 
         case NK_COMMAND_LINE:
             l = (const struct nk_command_line *)cmd;
-            _trace2("NK_COMMAND_LINE st[%d, %d] end[%d, %d] line[%f, %f]", l->begin.x, l->begin.y, l->end.x, l->end.y, l->line_thickness, l->color);
+            _trace2("NK_COMMAND_LINE st[%d, %d] end[%d, %d] line[%f, %d %d %d]", l->begin.x, l->begin.y, l->end.x, l->end.y, l->line_thickness, l->color.r, l->color.g, l->color.b);
             bar_stroke_line(win, l->begin.x, l->begin.y, l->end.x, l->end.y, l->line_thickness, l->color);
             break;
 
         case NK_COMMAND_RECT:
             r = (const struct nk_command_rect *)cmd;
-            _trace2("NK_COMMAND_RECT center[%d, %d], w:%d, h:%d %u line[%f, %f]", r->x, r->y, r->w, r->h, (unsigned short)r->rounding, r->line_thickness, r->color);
+            _trace2("NK_COMMAND_RECT center[%d, %d], w:%d, h:%d %u line[%f, %d %d %d]", r->x, r->y, r->w, r->h, (unsigned short)r->rounding, r->line_thickness, r->color.r, r->color.g, r->color.b);
             bar_stroke_rect(win, r->x, r->y, r->w, r->h, (unsigned short)r->rounding, r->line_thickness, r->color);
             break;
 
         case NK_COMMAND_RECT_FILLED:
             rf = (const struct nk_command_rect_filled *)cmd;
-            _trace2("NK_COMMAND_RECT_FILLED center[%d, %d], w:%d, h:%d %u color %f", rf->x, rf->y, rf->w, rf->h, (unsigned short)rf->rounding, rf->color);
+            _trace2("NK_COMMAND_RECT_FILLED center[%d, %d], w:%d, h:%d %u color %d %d %d", rf->x, rf->y, rf->w, rf->h, (unsigned short)rf->rounding, rf->color.r, rf->color.g, rf->color.b);
             bar_fill_rect(win, rf->x, rf->y, rf->w, rf->h, (unsigned short)rf->rounding, rf->color);
             break;
 
         case NK_COMMAND_CIRCLE:
             c = (const struct nk_command_circle *)cmd;
-            _trace2("NK_COMMAND_CIRCLE center[%d,%d], radius[%d, %d], line[%d, %f]", c->x, c->y, c->w, c->h, c->line_thickness, c->color);
+            _trace2("NK_COMMAND_CIRCLE center[%d,%d], radius[%d, %d], line[%d, %d %d %d]", c->x, c->y, c->w, c->h, c->line_thickness, c->color.r, c->color.g, c->color.b);
             // todo(marius): pick it up from rawfb example
             //bar_stroke_circle(win, c->x, c->y, c->w, c->h, c->line_thickness, c->color);
             break;
 
         case NK_COMMAND_CIRCLE_FILLED:
             cf = (const struct nk_command_circle_filled *)cmd;
-            _trace2("NK_COMMAND_CIRCLE_FILLED center[%d,%d], radius[%d, %d], fill[%f]", cf->x, cf->y, cf->w, cf->h, cf->color);
+            _trace2("NK_COMMAND_CIRCLE_FILLED center[%d,%d], radius[%d, %d], fill[%d %d %d]", cf->x, cf->y, cf->w, cf->h, cf->color.r, cf->color.g, cf->color.b);
             // todo(marius): pick it up from rawfb example
             //bar_fill_circle(win, cf->x, cf->y, cf->w, cf->h, cf->color);
             break;
 
         case NK_COMMAND_TRIANGLE:
             t = (const struct nk_command_triangle*)cmd;
-            _trace2("NK_COMMAND_TRIANGLE A[%d,%d], B[%d, %d], C[%d,%d] line[%d, %f]", t->a.x, t->a.y, t->b.x, t->b.y, t->c.x, t->c.y, t->line_thickness, t->color);
+            _trace2("NK_COMMAND_TRIANGLE A[%d,%d], B[%d, %d], C[%d,%d] line[%d, %d %d %d]", t->a.x, t->a.y, t->b.x, t->b.y, t->c.x, t->c.y, t->line_thickness, t->color.r, t->color.g, t->color.b);
             // todo(marius): pick it up from rawfb example
             //bar_stroke_triangle(win, t->a.x, t->a.y, t->b.x, t->b.y, t->c.x, t->c.y, t->line_thickness, t->color);
             break;
 
         case NK_COMMAND_TRIANGLE_FILLED:
             tf = (const struct nk_command_triangle_filled *)cmd;
-            _trace2("NK_COMMAND_TRIANGLE_FILLED A[%d,%d], B[%d, %d], C[%d,%d] fill[%f]", tf->a.x, tf->a.y, tf->b.x, tf->b.y, tf->c.x, tf->c.y, tf->color);
+            _trace2("NK_COMMAND_TRIANGLE_FILLED A[%d,%d], B[%d, %d], C[%d,%d] fill[%d %d %d]", tf->a.x, tf->a.y, tf->b.x, tf->b.y, tf->c.x, tf->c.y, tf->color.r, tf->color.g, tf->color.b);
             bar_fill_triangle(win, tf->a.x, tf->a.y, tf->b.x, tf->b.y, tf->c.x, tf->c.y, tf->color);
             break;
 
         case NK_COMMAND_POLYGON:
             p = (const struct nk_command_polygon*)cmd;
-            _trace2("NK_COMMAND_POLYGON points[%d], point_count[%d], line[%f, %f]", p->points, p->point_count, p->line_thickness,p->color);
+            _trace2("NK_COMMAND_POLYGON points[%d], point_count[%d], line[%f, %d %d %d]", p->points, p->point_count, p->line_thickness,p->color.r, p->color.g, p->color.b);
             // todo(marius): pick it up from rawfb example
             //bar_stroke_polygon(win, p->points, p->point_count, p->line_thickness,p->color);
             break;
 
         case NK_COMMAND_POLYGON_FILLED:
             pf = (const struct nk_command_polygon_filled *)cmd;
-            _trace2("NK_COMMAND_POLYGON_FILLED points[%d], point_count[%d], color[%f]", pf->points, pf->point_count, pf->color);
+            _trace2("NK_COMMAND_POLYGON_FILLED points[%d], count[%d], color[%d %d %d]", pf->points, pf->point_count, pf->color.r, pf->color.g, pf->color.b);
             // todo(marius): pick it up from rawfb example
             //bar_fill_polygon(win, p->points, p->point_count, p->color);
             break;
 
         case NK_COMMAND_POLYLINE:
             pl = (const struct nk_command_polyline *)cmd;
-            _trace2("NK_COMMAND_POLYLINE %", pl->points, pl->point_count, pl->line_thickness, pl->color);
+            _trace2("NK_COMMAND_POLYLINE points[%d] count[%d] thickness[%d] color[%d %d %d]", pl->points, pl->point_count, pl->line_thickness, pl->color.r, pl->color.g, pl->color.b);
             // todo(marius): pick it up from rawfb example
             //bar_stroke_polyline(win, pl->points, pl->point_count, pl->line_thickness, pl->color);
             break;
