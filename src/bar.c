@@ -15,8 +15,10 @@
 #include <string.h>
 
 #include "nuklear.h"
+
 #include "structs.h"
 #include "utils.h"
+#include "configuration.h"
 #include "draw.h"
 #include "wayland.h"
 #include "version.h"
@@ -58,15 +60,17 @@ int main(int argc, char** argv)
     }
 
     char* name = argv[0];
-    if (argc <= 1) {
-        goto _help;
+    if (argc >= 2) {
+        char *command = argv[1];
+        if (strncmp(command, ARG_HELP, 5) == 0) {
+            goto _help;
+        }
     }
 
-    char *command = argv[1];
-    if (strcmp(command, ARG_HELP) == 0) {
-        goto _help;
-    }
+    struct configuration config = {0};
+    load_configuration(&config, NULL);
 
+    print_configuration(&config);
     struct nukebar bar = {0};
     _trace2("Started bar %p:%u", &bar, sizeof(bar));
 
