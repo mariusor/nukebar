@@ -41,7 +41,7 @@ const char* get_version()
     return VERSION_HASH;
 }
 
-void print_help(char* name)
+void print_help(const char* name)
 {
     const char* help_msg;
     const char* version = get_version();
@@ -59,7 +59,7 @@ int main(int argc, char** argv)
         goto _failure;
     }
 
-    char* name = argv[0];
+    const char *name = basename(argv[0]);
     if (argc >= 2) {
         char *command = argv[1];
         if (strncmp(command, ARG_HELP, 5) == 0) {
@@ -68,7 +68,7 @@ int main(int argc, char** argv)
     }
 
     struct configuration config = {0};
-    load_configuration(&config, NULL);
+    load_configuration(&config, name);
 
     print_configuration(&config);
     struct nukebar bar = {0};
