@@ -177,8 +177,7 @@ static bool render(struct nukebar *bar, uint32_t time) {
 
 
     _trace2("nk_begin");
-    if (nk_begin(&(bar->ctx), "NukeBAR", nk_rect(0, 0, bar->width, bar->height),
-            NK_WINDOW_BORDER | NK_WINDOW_NO_INPUT | NK_WINDOW_BACKGROUND)) {
+    if (nk_begin(&(bar->ctx), "NukeBAR", nk_rect(0, 0, bar->width, bar->height), NK_WINDOW_BORDER | NK_WINDOW_NO_INPUT | NK_WINDOW_BACKGROUND)) {
         nk_layout_row_static(&(bar->ctx), bar->height, bar->width, 1);
         if (nk_button_label(&(bar->ctx), "button")) {
             _info("button pressed");

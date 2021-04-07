@@ -67,6 +67,7 @@ struct nukebar {
     struct wl_registry *registry;
     struct wl_compositor *compositor;
     struct wl_output *output;
+    struct wl_region *input_region;
 
     //struct wl_list outputs;
     //struct wl_list seats;

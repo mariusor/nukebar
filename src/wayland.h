@@ -132,11 +132,13 @@ static void output_done(void *data, struct wl_output *wl_output) {
 
 static void output_scale(void *data, struct wl_output *wl_output, int32_t factor) {
 	_trace2("output_scale[%p] wl_output[%p] factor=%d", data, wl_output, factor);
-    //struct nukebar *bar = data;
-    //output->scale = scale;
-    //if (output->state->run_display && output->width > 0 && output->height > 0) {
-    //    render_frame(output);
-    //}
+#if 0
+	struct nukebar *bar = data;
+	bar->scale = scale;
+	if (output->state->run_display && output->width > 0 && output->height > 0) {
+		render_frame(output);
+	}
+#endif
 }
 
 
@@ -172,51 +174,69 @@ static void xdg_output_handle_logical_size(void *data, struct zxdg_output_v1 *xd
 }
 
 static void destroy_layer_surface(struct nukebar *bar) {
-    if (!bar->layer_surface) {
-        return;
-    }
-    zwlr_layer_surface_v1_destroy(bar->layer_surface);
-    wl_surface_attach(bar->surface, NULL, 0, 0); // detach buffer
-    bar->layer_surface = NULL;
-    bar->width = 0;
-    //output->frame_scheduled = false;
+	if (!bar->layer_surface) {
+		return;
+	}
+	_trace2("destroy_layer_surface[%p] %p", bar);
+	zwlr_layer_surface_v1_destroy(bar->layer_surface);
+	//wl_surface_attach(bar->surface, NULL, 0, 0); // detach buffer
+	bar->layer_surface = NULL;
+	bar->width = 0;
+	//output->frame_scheduled = false;
 }
 
 static void layer_surface_closed(void *data, struct zwlr_layer_surface_v1 *surface) {
-    struct nukebar *bar = data;
-    destroy_layer_surface(bar);
-    _trace2("layer_surface_closed[%p] %p", bar, surface);
+	struct nukebar *bar = data;
+	destroy_layer_surface(bar);
+	_trace2("layer_surface_closed[%p] %p", bar, surface);
 }
 
-static void set_output_dirty(struct nukebar*);
+static void set_output_dirty(struct nukebar* bar)
+{
+	if (bar->surface) {
+		render(bar, 0);
+	}
+}
 
 static void layer_surface_configure(void *data, struct zwlr_layer_surface_v1 *surface, uint32_t serial, uint32_t width, uint32_t height)
 {
 	struct nukebar *bar = data;
 	_trace2("layer_surface_configure[%p] layer_surface[%p] serial=%d w=%d h=%d", bar, surface, serial, width, height);
-    bar->width = width;
-    bar->height = height;
-    zwlr_layer_surface_v1_ack_configure(surface, serial);
-    render(bar, 0);
+	bar->width = width;
+	bar->height = height;
+	zwlr_layer_surface_v1_ack_configure(surface, serial);
+	set_output_dirty(bar);
 }
 
 struct zwlr_layer_surface_v1_listener layer_surface_listener = {
-        .configure = layer_surface_configure,
-        .closed = layer_surface_closed,
+	.configure = layer_surface_configure,
+	.closed = layer_surface_closed,
 };
 
 static void add_layer_surface(struct nukebar *bar)
 {
-    _trace("setting surface: %dx%d", bar->width, bar->height);
+	_trace("setting surface: %dx%d", bar->width, bar->height);
+	bool overlay = true;
+	enum zwlr_layer_shell_v1_layer layer = overlay ? ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY : ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM;
 
-    bar->layer_surface = zwlr_layer_shell_v1_get_layer_surface(bar->layer_shell, bar->surface, bar->output, ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM, "panel");
-    assert(bar->layer_surface);
-    zwlr_layer_surface_v1_set_size(bar->layer_surface, bar->width, bar->height);
-    zwlr_layer_surface_v1_set_anchor(bar->layer_surface, ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT);
-    zwlr_layer_surface_v1_set_margin(bar->layer_surface, 0, 0, 0, 0);
-    zwlr_layer_surface_v1_add_listener(bar->layer_surface, &layer_surface_listener, bar);
-    zwlr_layer_surface_v1_set_exclusive_zone(bar->layer_surface, -1);
-    wl_surface_commit(bar->surface);
+	bar->layer_surface = zwlr_layer_shell_v1_get_layer_surface(bar->layer_shell, bar->surface, bar->output, layer, "panel");
+	assert(bar->layer_surface);
+	zwlr_layer_surface_v1_add_listener(bar->layer_surface, &layer_surface_listener, bar);
+	if (overlay) {
+		// Empty input region
+		bar->input_region = wl_compositor_create_region(bar->compositor);
+		assert(bar->input_region);
+
+		wl_surface_set_input_region(bar->surface, bar->input_region);
+	}
+
+	zwlr_layer_surface_v1_set_anchor(bar->layer_surface, ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM);
+	//zwlr_layer_surface_v1_set_size(bar->layer_surface, bar->width, bar->height);
+	//zwlr_layer_surface_v1_set_margin(bar->layer_surface, 0, 0, 0, 0);
+	if (overlay) {
+		zwlr_layer_surface_v1_set_exclusive_zone(bar->layer_surface, -1);
+	}
+	//wl_surface_commit(bar->surface);
 }
 
 static void xdg_output_handle_done(void *data, struct zxdg_output_v1 *xdg_output)
@@ -225,7 +245,7 @@ static void xdg_output_handle_done(void *data, struct zxdg_output_v1 *xdg_output
 	struct nukebar *bar = data;
 	if (NULL == bar->surface) {
 		bar->surface = wl_compositor_create_surface(bar->compositor);
-        assert(bar->surface);
+		assert(bar->surface);
 	}
 
 	// Empty input region
@@ -267,6 +287,7 @@ static void add_xdg_output(struct nukebar *bar) {
 
 static void bar_xdg_wm_base_ping (void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial)
 {
+	_trace2("xdg_wm_base pong");
 	xdg_wm_base_pong(xdg_wm_base, serial);
 }
 
@@ -284,8 +305,8 @@ static void handle_global(void *data, struct wl_registry *registry, uint32_t nam
 		bar->seat = wl_registry_bind(registry, name, &wl_seat_interface, 3);
 		wl_seat_add_listener(bar->seat, &seat_listener, bar);
 	} else if (strcmp(interface, wl_output_interface.name) == 0) {
-        // TODO(marius): this needs an array of outputs, because we should be able to draw the bar on
-        //  different ones.
+		// TODO(marius): this needs an array of outputs, because we should be able to draw the bar on
+		//  different ones.
 		bar->output = wl_registry_bind(registry, name, &wl_output_interface, 1);
 		wl_output_add_listener(bar->output, &output_listener, bar);
 		if (bar->xdg_output_manager != NULL) {
@@ -339,6 +360,9 @@ static const struct wl_registry_listener registry_listener = {
 	.global_remove = handle_global_remove,
 };
 
+#define DEFAULT_INIT_POS_X 300
+#define DEFAULT_INIT_POS_Y 300
+
 static void frame_handle_done(void *data, struct wl_callback *callback, uint32_t time) {
 	_trace2("callback%p, time=%d", callback, time);
 	time = time;
@@ -346,19 +370,21 @@ static void frame_handle_done(void *data, struct wl_callback *callback, uint32_t
 	struct nukebar *bar = data;
 
 	_trace2("redrawing.. ");
-	//struct nk_color col_red = {0xFF,0x00,0x00,0xA0}; //r,g,b,a
-	//struct nk_color col_green = {0x00,0xFF,0x00,0xA0}; //r,g,b,a
+#if 0
+	struct nk_color col_red = {0xFF,0x00,0x00,0xA0}; //r,g,b,a
+	struct nk_color col_green = {0x00,0xFF,0x00,0xA0}; //r,g,b,a
+#endif
 	wl_callback_destroy(bar->frame_callback);
 	wl_surface_damage(bar->surface, 0, 0, bar->width, bar->height);
 
 	bar->frame_callback = wl_surface_frame(bar->surface);
 	wl_surface_attach(bar->surface, bar->front_buffer, 0, 0);
 	wl_callback_add_listener(bar->frame_callback, &frame_listener, bar);
-	wl_surface_commit(bar->surface);
 	if (!render(bar, time)) {
 		_error("failed to render frame, stopping.");
 		bar->stop = true;
 	}
+	wl_surface_commit(bar->surface);
 }
 
 static const struct wl_callback_listener frame_listener = {
