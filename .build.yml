@@ -1,0 +1,15 @@
+image: archlinux
+packages:
+  - clang
+  - meson
+  - ninja
+  - wayland
+  - wayland-protocols
+sources:
+  - https://github.com/mariusor/nukebar
+tasks:
+  - build: |
+      cd nukebar
+      meson build
+      ninja -C build/
+
