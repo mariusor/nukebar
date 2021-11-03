@@ -19,22 +19,22 @@
 #define DEFAULT_WIDTH_PX 1920
 #define DEFAULT_HEIGHT_PX 30
 
-static void pointer_handle_motion(void *data, struct wl_pointer *pointer, uint32_t serial,  wl_fixed_t x,  wl_fixed_t y)
+static void pointer_handle_motion(void *data, struct wl_pointer *pointer, uint32_t serial, wl_fixed_t x, wl_fixed_t y)
 {
 	_trace2("pointer_motion[%p], pointer[%p] serial=%d [%d,%d]", data, pointer, serial, x, y);
 }
 
-static void pointer_handle_enter(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t x,  wl_fixed_t y)
+static void pointer_handle_enter(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y)
 {
 	_trace2("pointer_enter[%p], pointer[%p] serial=%d [%d,%d] surface[%p]", data, pointer, serial, x, y, surface);
 }
 
-static void pointer_handle_leave(void *data, struct wl_pointer *pointer, uint32_t serial,  struct wl_surface *surface)
+static void pointer_handle_leave(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface)
 {
 	_trace2("pointer_leave[%p], pointer[%p] serial=%d surface[%p]", data, pointer, serial, surface);
 }
 
-static void pointer_handle_axis(void *data, struct wl_pointer *pointer, uint32_t x,  uint32_t y,  wl_fixed_t pos)
+static void pointer_handle_axis(void *data, struct wl_pointer *pointer, uint32_t x, uint32_t y, wl_fixed_t pos)
 {
 	_trace2("pointer_axis[%p], pointer[%p] pos=%d [%d,%d]", data, pointer, pos, x, y);
 }
@@ -326,7 +326,7 @@ static void handle_global(void *data, struct wl_registry *registry, uint32_t nam
 static void handle_global_remove(void *data, struct wl_registry *registry, uint32_t name)
 {
 	_trace2("data pointer %p", data);
-	struct nukebar *bar  = data;
+	struct nukebar *bar = data;
 	registry = (void*)registry;
 	if (bar->registry != registry) {
 		_warn("registry pointers are different, %p vs %p", bar->registry, registry);
