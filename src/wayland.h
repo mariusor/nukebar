@@ -194,7 +194,7 @@ static void layer_surface_closed(void *data, struct zwlr_layer_surface_v1 *surfa
 static void set_output_dirty(struct nukebar* bar)
 {
 	if (bar->surface) {
-		render(bar, 0);
+		//render(bar, 0);
 	}
 }
 
