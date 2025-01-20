@@ -21,7 +21,7 @@
 
 static void pointer_handle_motion(void *data, struct wl_pointer *pointer, uint32_t serial, wl_fixed_t x, wl_fixed_t y)
 {
-	_trace2("pointer_motion[%p], pointer[%p] serial=%d [%d,%d]", data, pointer, serial, x, y);
+	_trace2("pointer_motion[%p], pointer[%p] serial=%d x=%d y=%d", data, pointer, serial, x, y);
 }
 
 static void pointer_handle_enter(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y)

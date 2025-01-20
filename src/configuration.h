@@ -29,6 +29,7 @@ struct configuration {
     struct env_variables env;
     const char name[MAX_PROPERTY_LENGTH];
     const char file[MAX_PROPERTY_LENGTH];
+    const int height;
 };
 
 #ifndef APPLICATION_NAME
@@ -59,6 +60,11 @@ struct configuration {
 #define CONFIG_VALUE_ZERO           "0"
 #define CONFIG_KEY_ENABLED          "enabled"
 #define CONFIG_KEY_IGNORE           "ignore"
+
+#define CONFIG_GROUP_BAR            "bar"
+#define CONFIG_KEY_SCREEN           "screen"
+#define CONFIG_VALUE_PRIMARY        "primary"
+#define CONFIG_KEY_HEIGHT           "height"
 
 static void load_environment(struct env_variables *env)
 {
@@ -190,6 +196,11 @@ void load_config_from_file(struct configuration *config, const char* path)
     int group_count = arrlen(ini.groups);
     for (int i = 0; i < group_count; i++) {
         // todo(marius): add the config load
+        struct ini_group *group = ini.groups[i];
+        if (strncmp(group->name->data, CONFIG_GROUP_BAR, 3) == 0) {
+            //for (int i = 0; i < group->item_count; i++) {
+            //}
+        }
     }
 
     print_ini(&ini);

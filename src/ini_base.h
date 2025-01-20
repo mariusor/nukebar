@@ -25,10 +25,12 @@ struct ini_value {
 struct ini_group {
     string name;
     struct ini_value **values;
+    size_t count;
 };
 
 struct ini_config {
     struct ini_group **groups;
+    size_t count;
 };
 
 static void ini_value_free(struct ini_value *value)
